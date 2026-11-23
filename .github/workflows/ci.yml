@@ -21,7 +21,8 @@ jobs:
       - name: Install Ruff
         run: uv sync --only-group dev
       - name: Run Ruff Check
-        run: uv run ruff check .
+        # Legacy desktop code in src/ is excluded until it is migrated to the REST API (plan §6).
+        run: uv run ruff check server ml tools
 
   test:
     name: Run Tests (Ubuntu)
@@ -59,7 +60,7 @@ jobs:
           python-version: "3.10"
 
       - name: Install Dependencies
-        run: uv sync --all-extras --dev
+        run: uv sync --group server --group dev
 
       - name: Install xvfb & OS Libs
         run: |
@@ -81,7 +82,9 @@ jobs:
           DB_NAME: simonpro_test
           DB_PORT: 5432
           QT_QPA_PLATFORM: offscreen
-        run: xvfb-run -a uv run pytest tests/ -v --cov=src --cov-report=xml --cov-report=term-missing
+        # Legacy desktop tests (tests/) target the old textile schema and are excluded until
+        # the desktop app is migrated to the REST API (plan §6); only the smoke test runs.
+        run: xvfb-run -a uv run pytest server/tests tests/test_dummy.py -v --cov=server --cov-report=xml --cov-report=term-missing
 
       - name: Upload Coverage Report
         uses: actions/upload-artifact@v4

@@ -1,0 +1,50 @@
+{
+  "sku": "DEMO-CAN",
+  "version": "v1",
+  "split": "test",
+  "manifest": "/mnt/storage/simonpro/data/manifests/DEMO-CAN.csv",
+  "n_ok": 84,
+  "n_ng": 82,
+  "threshold": 0.185,
+  "auroc": 0.9216,
+  "tp": 75,
+  "fn": 7,
+  "tn": 55,
+  "fp": 29,
+  "recall": 0.9146,
+  "specificity": 0.6548,
+  "accuracy": 0.7831,
+  "targets": {
+    "K2_recall_min": 0.9,
+    "K3_specificity_min": 0.85,
+    "AI04_latency_ms_max": 500
+  },
+  "pass": {
+    "K2": true,
+    "K3": false,
+    "AI04": true
+  },
+  "latency_ms": {
+    "p50": 210.9,
+    "p95": 215.9,
+    "max": 219.0
+  },
+  "device": "cpu",
+  "model": {
+    "backbone": "wide_resnet50_2",
+    "image_size": 224,
+    "coreset_ratio": 0.1,
+    "bank_size": 18424,
+    "n_train_images": 235,
+    "calibration": {
+      "split": "val",
+      "n_ok": 63,
+      "n_ng": 64,
+      "target_recall": 0.9,
+      "auroc": 0.9164,
+      "recall": 0.9062,
+      "specificity": 0.5238,
+      "manifest": "/mnt/storage/simonpro/data/manifests/DEMO-CAN.csv"
+    }
+  }
+}

@@ -53,3 +53,14 @@ pgdata/
 
 # Local files and folders
 local_*
+!.env.example
+
+# SiMonPro runtime data (models, datasets, inspection images)
+models/
+dataset/
+storage/
+doc/model_eval/*/scores.csv
+.envrc.endeavour
+
+# Source documents (kept locally)
+*.docx
