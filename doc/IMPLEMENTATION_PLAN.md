@@ -300,9 +300,12 @@ If time runs out, cut in this order (PRD risk table): P2 pages, then PDF for the
 - End-to-end run on endeavour (real model, `tools/fake_device.py`, 30 cans): dashboard counts equal the device tally (K6), one REJECT event per NG (FR-16), HOLD → shipment 409 (FR-29), server round trip about 250 ms per can on CPU.
 - `tools/fetch_wheels.py`: offline install. Nix-built uv on endeavour can't resolve DNS through Tailscale MagicDNS (see `server/README.md`).
 
-**Blockers / to do on endeavour**
-- `llama-server` (Air-26B, port 8090) holds **7.2 of 8 GB VRAM**, so PatchCore currently runs on CPU. Stop it during training and demo runs to measure AI-04 on the GPU.
-- The Docker daemon is inactive (needs `sudo systemctl enable --now docker`). Postgres currently runs as a user-space instance on :5433 under `/mnt/storage/simonpro/pg` (PG 18; the schema is the same).
+**GPU rerun (23 Nov, after the GPU was freed)** (`doc/model_eval/DEMO-CAN_v2/`): RTX 4060, memory bank in 23 s (CPU: 371 s), **inference p95 43 ms** (AI-04 met). Recall 90.2%, specificity 75.0%, AUROC 0.93 on GoodsAD. API on CUDA: about 75 ms server-side and about 86 ms round trip per can; the model uses about 750 MB of VRAM. Start and stop the server with `tools/server.sh start|stop|restart|status|log`.
+
+**Still open on endeavour (needs sudo)**
+- DNS: `/etc/resolv.conf` lists 127.0.2.2/127.0.2.3, where nothing listens. Fix: `sudo ln -sf /run/systemd/resolve/stub-resolv.conf /etc/resolv.conf`. Until then, install with `tools/fetch_wheels.py`.
+- Docker: the daemon is running but `pn` is not in the `docker` group (`sudo usermod -aG docker pn`, then log in again). Postgres still runs user-space on :5433 (`/mnt/storage/simonpro/pg`); stop it before `docker compose up -d`.
+- If `llama-server` (about 7.2 GB) runs again alongside the API (about 0.75 GB), VRAM is nearly full. Keep it stopped during demos.
 - CI now runs `server/tests` and lints `server ml tools`. The legacy desktop tests in `tests/` target the old textile schema and are excluded until §6. Ruff on `src/` already reported 71 errors before this change.
 
 **Next:** firmware (§5, needs the exact S3 board model), desktop app migration to the API (§6), and photo-box dataset capture (§3.1).
