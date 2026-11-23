@@ -64,3 +64,5 @@ doc/model_eval/*/scores.csv
 
 # Source documents (kept locally)
 *.docx
+firmware/.pio/
+firmware/include/device_config.h

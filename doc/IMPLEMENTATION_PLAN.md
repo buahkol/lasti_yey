@@ -25,7 +25,7 @@ The code in `src/` is the older **IF2050 textile production monitor**: Owner/Adm
 
 | Machine | Role | Facts |
 |---|---|---|
-| **ESP32-S3 camera board** on this laptop (`/dev/ttyACM0`, USB `303a:4001`, native USB CDC) | IoT device | It's an **S3, not the AI-Thinker ESP32-CAM** named in the PRD and D2. Update PRD Table 1 and D2 §1.3 wording to "ESP32-S3 + kamera OV2640/OV3660". Pins differ, see §5. The port needs `dialout`: `sudo usermod -aG dialout pn`, then log in again |
+| **ESP32-S3 camera board** on this laptop (`/dev/ttyACM0`, USB `303a:4001`, native USB CDC) | IoT device | It's an **S3, not the AI-Thinker ESP32-CAM** named in the PRD and D2. Update PRD Table 1 and D2 §1.3 wording to "ESP32-S3 N16R8 + kamera OV5640". Pins differ, see §5. The port needs `dialout`: `sudo usermod -aG dialout pn`, then log in again |
 | **`pn@endeavour`** | Edge server: FastAPI, PatchCore, PostgreSQL | RTX 4060 Laptop **8 GB**, NVIDIA driver 615.78, Python 3.11, uv, Docker, 19 GB RAM. **PyTorch not installed yet** (installed into the project venv by `uv sync --group server`). `/mnt/storage` is **93% full (27 GB free)**, so **the home disk `/` is also 96% full (3.8 GB free)**, so the venv, dataset, models and inspection images live under `/mnt/storage/simonpro/` (see `.env.example`) |
 | This laptop (MX150, no CUDA) | Development + desktop app | Runs the PyQt6 app against endeavour over the LAN (NF-09). Server tests use the stub model on CPU |
 
@@ -199,7 +199,7 @@ Field names, response shapes and status codes below are **copied from D2**, beca
 
 ## 5. Firmware (`firmware/`, PlatformIO + Arduino-ESP32)
 
-**Board: ESP32-S3** (native USB). PlatformIO env: `board = esp32-s3-devkitc-1`, `build_flags = -DARDUINO_USB_CDC_ON_BOOT=1 -DBOARD_HAS_PSRAM`, and `board_build.arduino.memory_type = qio_opi` for N8R8/N16R8 modules (check the module marking). Flashing works over the same USB port. If upload fails, hold **BOOT** and tap **RESET**. `camera_pins.h` must match the **exact S3 board model** (Freenove ESP32-S3-WROOM CAM, ESP32-S3-EYE, XIAO S3 Sense and generic "ESP32-S3-CAM" boards all differ). Copy it from the vendor's `CameraWebServer` example. **Action:** read the board's silkscreen or model name, run `uvx esptool --port /dev/ttyACM0 flash_id` (flash/PSRAM size), and add the model to this section.
+**Board: ESP32-S3 N16R8 (16 MB flash, 8 MB octal PSRAM) with an OV5640 on the ribbon connector**, confirmed 23 Nov; camera pins use the ESP32-S3-EYE/Freenove layout. **Implemented** in `firmware/` (builds; see `firmware/README.md`). Deviations from the table below: the IR sensor is a polled state machine (no ISR), there is a settle delay (default 200 ms) before the photo, and the board opens a setup access point when no Wi-Fi is configured. Original notes: (native USB). PlatformIO env: `board = esp32-s3-devkitc-1`, `build_flags = -DARDUINO_USB_CDC_ON_BOOT=1 -DBOARD_HAS_PSRAM`, and `board_build.arduino.memory_type = qio_opi` for N8R8/N16R8 modules (check the module marking). Flashing works over the same USB port. If upload fails, hold **BOOT** and tap **RESET**. `camera_pins.h` must match the **exact S3 board model** (Freenove ESP32-S3-WROOM CAM, ESP32-S3-EYE, XIAO S3 Sense and generic "ESP32-S3-CAM" boards all differ). Copy it from the vendor's `CameraWebServer` example. **Action:** read the board's silkscreen or model name, run `uvx esptool --port /dev/ttyACM0 flash_id` (flash/PSRAM size), and add the model to this section.
 
 | Concern | Implementation |
 |---|---|
