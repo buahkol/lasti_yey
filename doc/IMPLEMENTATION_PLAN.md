@@ -302,10 +302,9 @@ If time runs out, cut in this order (PRD risk table): P2 pages, then PDF for the
 
 **GPU rerun (23 Nov, after the GPU was freed)** (`doc/model_eval/DEMO-CAN_v2/`): RTX 4060, memory bank in 23 s (CPU: 371 s), **inference p95 43 ms** (AI-04 met). Recall 90.2%, specificity 75.0%, AUROC 0.93 on GoodsAD. API on CUDA: about 75 ms server-side and about 86 ms round trip per can; the model uses about 750 MB of VRAM. Start and stop the server with `tools/server.sh start|stop|restart|status|log`.
 
-**Still open on endeavour (needs sudo)**
-- DNS: `/etc/resolv.conf` lists 127.0.2.2/127.0.2.3, where nothing listens. Fix: `sudo ln -sf /run/systemd/resolve/stub-resolv.conf /etc/resolv.conf`. Until then, install with `tools/fetch_wheels.py`.
-- Docker: the daemon is running but `pn` is not in the `docker` group (`sudo usermod -aG docker pn`, then log in again). Postgres still runs user-space on :5433 (`/mnt/storage/simonpro/pg`); stop it before `docker compose up -d`.
-- If `llama-server` (about 7.2 GB) runs again alongside the API (about 0.75 GB), VRAM is nearly full. Keep it stopped during demos.
+**Endeavour setup done (23 Nov):** DNS fixed (`/etc/resolv.conf` → systemd-resolved stub), so `uv sync` works normally again (the venv is at `/mnt/storage/simonpro/venv` via `.envrc.endeavour`). `pn` is in the `docker` group, and Postgres now runs from `docker compose` on :5433; the temporary user-space instance is stopped. Full suite on endeavour: **29 passed** (`QT_QPA_PLATFORM=offscreen` is needed for the Qt smoke test over SSH). API on CUDA with the simulated device: counts match (K6), about 87 ms round trip per can.
+- Keep `llama-server` stopped while the API runs: the model uses about 0.75 GB of the 8 GB.
+- `/` has about 4.5 GB free, and the Docker volume `pgdata` lives there. That's fine for the prototype, but watch it if inspection photos grow (they go to `/mnt/storage`).
 - CI now runs `server/tests` and lints `server ml tools`. The legacy desktop tests in `tests/` target the old textile schema and are excluded until §6. Ruff on `src/` already reported 71 errors before this change.
 
 **Next:** firmware (§5, needs the exact S3 board model), desktop app migration to the API (§6), and photo-box dataset capture (§3.1).
