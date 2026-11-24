@@ -27,7 +27,7 @@ router = APIRouter(prefix="/production", tags=["production"])
 @router.post("/outputs", response_model=OutputOut, status_code=status.HTTP_201_CREATED)
 def record_output(body: OutputIn, _: Principal = Depends(require_device),
                   conn: PgConnection = Depends(get_conn)):
-    require_open_batch(conn, body.batch_code)
+    require_open_batch(conn, body.batch_code, lock=True)
     with conn.cursor() as cur:
         cur.execute("INSERT INTO output_produksi (kode_batch, jumlah, waktu) VALUES (%s, %s, %s)",
                     (body.batch_code, body.quantity, body.timestamp))
