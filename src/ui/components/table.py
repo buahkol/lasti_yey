@@ -42,9 +42,10 @@ class _Row(QFrame):
 class DataTable(QFrame):
     """Table whose columns share the width by weight, so every row lines up and gaps stay even.
 
-    columns: list of (title, weight, align L | R | F (fill), optional right padding).
-    A weight of None counts as 2. Weights are relative, for example 3 for a
-    product name and 1 for a short number.
+    columns: list of (title, weight, align L | R | F (fill), optional right padding,
+    optional hide_below). A weight of None counts as 2. Weights are relative,
+    for example 3 for a product name and 1 for a short number. A column with
+    hide_below is hidden while the table is narrower than that many pixels.
     """
 
     row_clicked = pyqtSignal(int)
@@ -61,18 +62,20 @@ class DataTable(QFrame):
         if title is not None:
             title.layout().setContentsMargins(20, 0, 16, 10)
             self._lay.addWidget(title)
-        head = _Row(header=True)
-        self._fill(head, [text(c[0], Type.OVERLINE, Color.TEXT_TERTIARY) for c in columns], 9)
-        self._lay.addWidget(head)
+        self._head = _Row(header=True)
+        self._fill(self._head, [text(c[0], Type.OVERLINE, Color.TEXT_TERTIARY) for c in columns], 9)
+        self._lay.addWidget(self._head)
         self._end = QWidget()
         self._lay.addWidget(self._end, 1)
 
     def _fill(self, row: _Row, cells: list, pad: int) -> None:
         lay = hbox(0, (20, pad, 16, pad), row)
+        row.boxes = []
         for (title, weight, align, *rest), cell in zip(self.columns, cells):
             box = QWidget()
             box.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
-            right_pad = rest[0] if rest else (24 if align == "R" else 16)
+            right_pad = rest[0] if rest and rest[0] is not None else (24 if align == "R" else 16)
+            row.boxes.append(box)
             b_lay = hbox(8, (0, 0, right_pad, 0), box)
             if isinstance(cell, str):
                 cell = text(cell, Type.BODY)
@@ -85,10 +88,23 @@ class DataTable(QFrame):
                 b_lay.addWidget(cell)
                 b_lay.addStretch(1)
             lay.addWidget(box, weight or 2)
+        self._apply_hidden(row)
+
+    def _apply_hidden(self, row: _Row) -> None:
+        width = self.width()
+        for col, box in zip(self.columns, row.boxes):
+            hide_below = col[4] if len(col) > 4 else None
+            box.setVisible(not (hide_below and width < hide_below))
+
+    def resizeEvent(self, e):  # noqa: N802
+        super().resizeEvent(e)
+        for row in [self._head] + self.rows:
+            self._apply_hidden(row)
 
     def add_row(self, cells: list, selected: bool = False) -> _Row:
         row = _Row()
         self._fill(row, cells, self.row_padding)
+        self._apply_hidden(row)
         row.set_selected(selected)
         idx = len(self.rows)
         row.clicked.connect(lambda: self.row_clicked.emit(idx))
