@@ -7,7 +7,8 @@ from .. import mock_data as data
 from ..assets import pixmap
 from ..charts import Gauge, PeakBarChart
 from ..components import (
-    AlertRow, Badge, Button, Card, DataTable, DatePicker, PanelHeader, SegmentedTabs, StatCard, format_range,
+    AdaptiveRow, AlertRow, Badge, Button, Card, DataTable, DatePicker, PanelHeader, ResponsiveGrid, SegmentedTabs,
+    StatCard, format_range,
     hbox, text, toast, vbox,
 )
 from ..shell import Page
@@ -46,21 +47,21 @@ class LaporanPage(Page):
         export.clicked.connect(lambda: open_export_pdf(self._win(), r["code"], r["product"]))
         self.actions.addWidget(export)
 
-        stats = hbox(16)
+        stats = ResponsiveGrid(190, 5, 16, steps=(5, 3, 2, 1))
         ok_pct = r["ok"] / r["total"] * 100
         loss = r["ng"] * r["unit_price"]
-        stats.addWidget(StatCard("blue", "camera", "Total diperiksa", data.num(r["total"]), "kaleng", "100%", r["window"]))
-        stats.addWidget(StatCard("indigo", "check-circle", "Kaleng OK", data.num(r["ok"]), "kaleng", data.pct(ok_pct),
-                                 "dari total"))
-        stats.addWidget(StatCard("pink", "warning", "Kaleng NG", data.num(r["ng"]), "kaleng", data.pct(r["ng_percent"]),
-                                 f"batas {NG_TOLERANCE_PERCENT:g}%", "trend-up", highlight_value=True))
-        stats.addWidget(StatCard("amber", "trend-down", "Estimasi kerugian", data.rupiah(loss), "",
-                                 f"{r['ng']} x {data.rupiah(r['unit_price'])}", ""))
-        stats.addWidget(StatCard("blue", "activity", "Kejadian", str(r["events"]), "kejadian",
-                                 f"{r['events_reject']} REJECT", f"{r['events_manual']} manual"))
-        self.body.addLayout(stats)
+        stats.add(StatCard("blue", "camera", "Total diperiksa", data.num(r["total"]), "kaleng", "100%", r["window"]))
+        stats.add(StatCard("indigo", "check-circle", "Kaleng OK", data.num(r["ok"]), "kaleng", data.pct(ok_pct),
+                           "dari total"))
+        stats.add(StatCard("pink", "warning", "Kaleng NG", data.num(r["ng"]), "kaleng", data.pct(r["ng_percent"]),
+                           f"batas {NG_TOLERANCE_PERCENT:g}%", "trend-up", highlight_value=True))
+        stats.add(StatCard("amber", "trend-down", "Estimasi kerugian", data.rupiah(loss), "",
+                           f"{r['ng']} x {data.rupiah(r['unit_price'])}", ""))
+        stats.add(StatCard("blue", "activity", "Kejadian", str(r["events"]), "kejadian",
+                           f"{r['events_reject']} REJECT", f"{r['events_manual']} manual"))
+        self.body.addWidget(stats)
 
-        row2 = hbox(16)
+        row2 = AdaptiveRow(breakpoint=1000)
         chart = Card((20, 18, 20, 16), 12)
         head = hbox(12)
         col = vbox(2)
@@ -83,11 +84,11 @@ class LaporanPage(Page):
         bar_chart = PeakBarChart(r["ng_per_hour"], 12)
         bar_chart.setMinimumHeight(290)
         chart.add(bar_chart, 1)
-        row2.addWidget(chart, 1)
-        row2.addWidget(self._status_card())
-        self.body.addLayout(row2)
+        row2.add(chart, 1)
+        row2.add(self._status_card(), 0, fixed_width=400)
+        self.body.addWidget(row2)
 
-        row3 = hbox(16)
+        row3 = AdaptiveRow(breakpoint=1000)
         ph = PanelHeader("Kejadian produksi", f"{r['events']} kejadian, REJECT dicatat otomatis oleh AI", "Lihat kejadian")
         ph.action_clicked.connect(lambda: toast(self._win(), "info", "Halaman Kejadian", "Halaman ini dikerjakan pada Desktop P2."))
         events = DataTable([("Waktu", 10, "L"), ("Jenis", 20, "L"), ("Sumber", 14, "L"), ("Keterangan", 40, "L")],
@@ -95,9 +96,8 @@ class LaporanPage(Page):
         for time, kind, source, note in r["events_list"]:
             events.add_row([text(time, Type.BODY_STRONG), _event_kind(kind), text(source, Type.BODY),
                             text(note, Type.BODY, Color.TEXT_SECONDARY)])
-        row3.addWidget(events, 1)
+        row3.add(events, 1)
         top = Card((10, 16, 10, 12), 4)
-        top.setFixedWidth(440)
         tph = PanelHeader("Skor NG tertinggi", "Ikut dicetak pada laporan PDF")
         tph.layout().setContentsMargins(10, 0, 0, 6)
         top.add(tph)
@@ -107,13 +107,12 @@ class LaporanPage(Page):
             row.clicked.connect(lambda a=alert: open_photo_viewer(self._win(), a, r["product"]))
             top.add(row)
         top.layout_.addStretch(1)
-        row3.addWidget(top)
-        self.body.addLayout(row3, 1)
+        row3.add(top, 0, fixed_width=400)
+        self.body.addWidget(row3, 1)
 
     def _status_card(self) -> Card:
         r = data.REPORT
         card = Card((20, 18, 20, 18), 10)
-        card.setFixedWidth(440)
         head = hbox(8)
         head.addWidget(text("Status inspeksi", Type.TITLE), 1)
         held = r["ng_percent"] > NG_TOLERANCE_PERCENT
