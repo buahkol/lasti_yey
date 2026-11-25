@@ -1,4 +1,4 @@
-"""Collapsible sidebar (240 px expanded, 80 px collapsed)."""
+"""Collapsible sidebar (232 px expanded, 76 px collapsed). Collapses by itself on narrow windows."""
 
 from PyQt6.QtCore import QEasingCurve, QParallelAnimationGroup, QPropertyAnimation, QSize, Qt, pyqtSignal
 from PyQt6.QtWidgets import QBoxLayout, QButtonGroup, QFrame, QLabel, QPushButton, QSizePolicy, QWidget
@@ -19,7 +19,7 @@ class NavButton(QPushButton):
         self.key, self.label_text, self.icon_name, self.danger = key, label, icon_name, danger
         self.setCheckable(not danger)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setFixedHeight(46)
+        self.setFixedHeight(42)
         self.setToolTip(label)
         lay = hbox(12, (14, 0, 12, 0), self)
         self.icon = QLabel()
@@ -46,16 +46,16 @@ class NavButton(QPushButton):
         self.label.setVisible(not collapsed)
         m = self.layout()
         if collapsed:
-            self.setFixedSize(48, 48)
-            m.setContentsMargins(14, 0, 0, 0)
+            self.setFixedSize(44, 44)
+            m.setContentsMargins(12, 0, 0, 0)
         else:
-            self.setMinimumSize(0, 46)
-            self.setMaximumSize(16777215, 46)
+            self.setMinimumSize(0, 42)
+            self.setMaximumSize(16777215, 42)
             m.setContentsMargins(14, 0, 12, 0)
         if self.count:
             if collapsed:
                 m.removeWidget(self.count)
-                self.count.move(28, 2)
+                self.count.move(26, 1)
                 self.count.show()
                 self.count.raise_()
             else:
@@ -94,7 +94,7 @@ class Sidebar(QFrame):
         self.setFixedWidth(Size.SIDEBAR_EXPANDED)
         self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding)
         self.collapsed = False
-        lay = vbox(4, (16, 20, 16, 16), self)
+        lay = vbox(2, (14, 18, 14, 14), self)
 
         brand = hbox(10, (4, 0, 0, 0))
         self.logo = QLabel()
@@ -110,7 +110,7 @@ class Sidebar(QFrame):
         brand.addWidget(self.toggle)
         self.brand = brand
         lay.addLayout(brand)
-        lay.addSpacing(18)
+        lay.addSpacing(12)
 
         self.group = QButtonGroup(self)
         self.group.setExclusive(True)
@@ -119,7 +119,7 @@ class Sidebar(QFrame):
         self.dividers = []
         for title, items in (("Operasional", NAV_MAIN), ("Lainnya", NAV_OTHER)):
             lab = text(title, Type.OVERLINE, Color.TEXT_TERTIARY)
-            lab.setContentsMargins(14, 10, 0, 6)
+            lab.setContentsMargins(14, 8, 0, 4)
             lay.addWidget(lab)
             self.section_labels.append(lab)
             div = QFrame()
@@ -142,7 +142,7 @@ class Sidebar(QFrame):
             "QFrame#Device { background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 rgba(168,233,236,0.35),"
             f" stop:0.55 rgba(244,179,205,0.2), stop:1 #FFFFFF); border: 1px solid {Color.BORDER}; border-radius: 16px; }}"
         )
-        d_lay = vbox(4, (14, 12, 14, 12), self.device)
+        d_lay = vbox(2, (12, 10, 12, 10), self.device)
         row = hbox(8)
         dot = QFrame()
         dot.setFixedSize(8, 8)
@@ -153,16 +153,17 @@ class Sidebar(QFrame):
         d_lay.addLayout(row)
         self.device_caption = text("IP 192.168.1.42\n0,8 detik per kaleng", Type.CAPTION, Color.TEXT_TERTIARY)
         d_lay.addWidget(self.device_caption)
+        self.device.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         lay.addWidget(self.device)
         self.device_icon = QLabel()
-        self.device_icon.setFixedSize(48, 48)
+        self.device_icon.setFixedSize(44, 44)
         self.device_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.device_icon.setPixmap(pixmap("wifi", TONES["green"].solid, 20))
         self.device_icon.setToolTip("ESP32-CAM terhubung, IP 192.168.1.42")
         self.device_icon.setStyleSheet(self.device.styleSheet().replace("QFrame#Device", "QLabel"))
         self.device_icon.hide()
         lay.addWidget(self.device_icon, 0, Qt.AlignmentFlag.AlignHCenter)
-        lay.addSpacing(8)
+        lay.addSpacing(6)
         self.logout_btn = NavButton("logout", "Keluar", "logout", danger=True)
         self.logout_btn.clicked.connect(self.logout)
         lay.addWidget(self.logout_btn)
@@ -211,7 +212,7 @@ class Sidebar(QFrame):
             self.layout().setAlignment(b, Qt.AlignmentFlag.AlignHCenter if c else Qt.AlignmentFlag(0))
         self.device.setVisible(not c)
         self.device_icon.setVisible(c)
-        self.layout().setContentsMargins(16, 20, 16, 16)
+        self.layout().setContentsMargins(14, 18, 14, 14)
 
     def sizeHint(self) -> QSize:  # noqa: N802
         return QSize(self.width(), 800)

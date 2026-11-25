@@ -4,9 +4,12 @@ from PyQt6.QtCore import QPointF, Qt, pyqtSignal
 from PyQt6.QtGui import QColor, QPainter, QRadialGradient
 from PyQt6.QtWidgets import QFrame, QScrollArea, QStackedWidget, QWidget
 
-from ..components import hbox, text, vbox
+from ..components import AdaptiveRow, hbox, text, vbox
 from ..theme import Color, Type
 from .sidebar import Sidebar
+
+
+AUTO_COLLAPSE_WIDTH = 1280
 
 
 def paint_page_background(widget: QWidget) -> None:
@@ -26,9 +29,12 @@ def paint_page_background(widget: QWidget) -> None:
 
 
 class Page(QWidget):
-    """Base page: caption + Display title on the left, actions on the right, scrollable body."""
+    """Base page: Display title on the left, actions on the right, scrollable body.
 
-    def __init__(self, title: str, subtitle: str):
+    The actions move below the title when the window is too narrow for both.
+    """
+
+    def __init__(self, title: str):
         super().__init__()
         outer = vbox(0, (0, 0, 0, 0), self)
         scroll = QScrollArea()
@@ -41,18 +47,15 @@ class Page(QWidget):
         self.content = QWidget()
         self.content.setObjectName("PageContent")
         self.content.setStyleSheet("QWidget#PageContent { background: transparent; }")
-        self.content.setMinimumHeight(980)
         scroll.setWidget(self.content)
         self.body = vbox(16, (0, 4, 8, 8), self.content)
-        header = hbox(12)
-        col = vbox(0)
-        self.subtitle = text(subtitle, Type.CAPTION, Color.TEXT_TERTIARY)
-        col.addWidget(self.subtitle)
-        col.addWidget(text(title, Type.DISPLAY))
-        header.addLayout(col, 1)
-        self.actions = hbox(12)
-        header.addLayout(self.actions)
-        self.body.addLayout(header)
+        header = AdaptiveRow(spacing=24, stack_spacing=12)
+        self.title = text(title, Type.DISPLAY)
+        header.add(self.title, 1, align=Qt.AlignmentFlag.AlignVCenter)
+        actions = QWidget()
+        self.actions = hbox(12, (0, 0, 0, 0), actions)
+        header.add(actions, 0, align=Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        self.body.addWidget(header)
 
     def on_show(self) -> None:
         """Hook called when the page becomes visible (refresh timers, etc.)."""
@@ -66,7 +69,7 @@ class AppWindow(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("SiMonPro")
-        self.setMinimumSize(1280, 760)
+        self.setMinimumSize(1024, 620)
         lay = hbox(24, (16, 16, 24, 16), self)
         self.sidebar = Sidebar()
         lay.addWidget(self.sidebar)
@@ -76,6 +79,18 @@ class AppWindow(QWidget):
         self.pages: dict = {}
         self.sidebar.navigate.connect(self.go)
         self.sidebar.logout.connect(self.logout_requested)
+        self._auto_collapsed = False
+
+    def resizeEvent(self, e):  # noqa: N802
+        """Collapse the sidebar on narrow windows, like a Tailwind lg breakpoint."""
+        narrow = e.size().width() < AUTO_COLLAPSE_WIDTH
+        if narrow and not self.sidebar.collapsed:
+            self._auto_collapsed = True
+            self.sidebar.set_collapsed(True)
+        elif not narrow and self._auto_collapsed and self.sidebar.collapsed:
+            self._auto_collapsed = False
+            self.sidebar.set_collapsed(False)
+        super().resizeEvent(e)
 
     def add_page(self, key: str, page: QWidget) -> None:
         self.pages[key] = page

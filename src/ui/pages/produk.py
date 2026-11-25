@@ -46,7 +46,7 @@ class AvailabilityCard(Card):
 
 class ProdukPage(Page):
     def __init__(self, window_getter):
-        super().__init__("Produk", "Kelola data SKU, harga satuan, dan ketersediaan kaleng OK")
+        super().__init__("Produk")
         self._win = window_getter
         self.products = [dict(p) for p in data.PRODUCTS]
         self.current = 0

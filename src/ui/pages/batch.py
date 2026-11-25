@@ -20,7 +20,7 @@ _CODE = re.compile(r"^B-\d{4}-\d{2}$")
 
 class BatchPage(Page):
     def __init__(self, window_getter):
-        super().__init__("Batch", "Buat, pantau, dan tutup batch produksi")
+        super().__init__("Batch")
         self._win = window_getter
         self.batches = [dict(b) for b in data.BATCHES]
         self.filter = None

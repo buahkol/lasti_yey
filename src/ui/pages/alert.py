@@ -52,7 +52,7 @@ class _OlderTile(QFrame):
 
 class AlertPage(Page):
     def __init__(self, window_getter):
-        super().__init__("Alert kemasan cacat", "Kaleng NG terbaru, diperbarui otomatis setiap 5 detik")
+        super().__init__("Alert kemasan cacat")
         self._win = window_getter
         self.actions.addWidget(LiveIndicator())
         self.actions.addWidget(Button("30 menit terakhir", "outline", "md", "clock"))

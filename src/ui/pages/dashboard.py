@@ -88,7 +88,7 @@ class BatchHero(QFrame):
 
 class DashboardPage(Page):
     def __init__(self, navigate, window_getter):
-        super().__init__("Selamat pagi, Operasional", "Rabu, 25 November 2026, shift pagi")
+        super().__init__("Selamat pagi, Operasional")
         self._win = window_getter
         self.actions.addWidget(SearchField("Cari kode batch", 300))
         self.live = LiveIndicator()

@@ -29,7 +29,7 @@ def _event_kind(kind: str) -> QWidget:
 
 class LaporanPage(Page):
     def __init__(self, window_getter):
-        super().__init__("Laporan inspeksi batch", "Ringkasan hasil inspeksi, sebaran NG per jam, dan estimasi kerugian")
+        super().__init__("Laporan inspeksi batch")
         self._win = window_getter
         r = data.REPORT
         mode = SegmentedTabs(["Per batch", "Per tanggal"])
