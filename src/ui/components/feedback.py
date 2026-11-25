@@ -1,8 +1,10 @@
 """Overlay (modal with scrim), StatusDialog and Toast."""
 
 from PyQt6.QtCore import QEvent, QPointF, QRectF, Qt, QTimer, pyqtSignal
-from PyQt6.QtGui import QColor, QPainter, QPen
-from PyQt6.QtWidgets import QFrame, QLabel, QSizePolicy, QWidget
+from PyQt6.QtGui import QColor, QImage, QPainter, QPen, QPixmap
+from PyQt6.QtWidgets import (
+    QFrame, QGraphicsBlurEffect, QGraphicsPixmapItem, QGraphicsScene, QLabel, QSizePolicy, QWidget,
+)
 
 from ..assets import pixmap
 from ..theme import TONES, Color, Type
@@ -10,8 +12,29 @@ from .base import add_shadow, hbox, text, vbox
 from .buttons import Button, IconButton
 
 
+def blurred(pixmap: QPixmap, radius: float = 10.0, downscale: int = 4) -> QPixmap:
+    """Gaussian blur of a pixmap. Works on a smaller copy so it stays fast on large windows."""
+    if pixmap.isNull():
+        return pixmap
+    small = pixmap.toImage().scaled(max(1, pixmap.width() // downscale), max(1, pixmap.height() // downscale),
+                                    Qt.AspectRatioMode.IgnoreAspectRatio, Qt.TransformationMode.SmoothTransformation)
+    scene = QGraphicsScene()
+    item = QGraphicsPixmapItem(QPixmap.fromImage(small))
+    effect = QGraphicsBlurEffect()
+    effect.setBlurRadius(radius)
+    effect.setBlurHints(QGraphicsBlurEffect.BlurHint.QualityHint)
+    item.setGraphicsEffect(effect)
+    scene.addItem(item)
+    out = QImage(small.size(), QImage.Format.Format_ARGB32_Premultiplied)
+    out.fill(QColor(Color.CANVAS))
+    p = QPainter(out)
+    scene.render(p, QRectF(0, 0, small.width(), small.height()), QRectF(0, 0, small.width(), small.height()))
+    p.end()
+    return QPixmap.fromImage(out)
+
+
 class Overlay(QWidget):
-    """Dims the window and shows a centred content widget. Esc or a click on the scrim closes it."""
+    """Blurs and dims the window behind a centred content widget. Esc or a click outside closes it."""
 
     closed = pyqtSignal()
 
@@ -22,6 +45,7 @@ class Overlay(QWidget):
         content.setParent(self)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         window.installEventFilter(self)
+        self._backdrop = blurred(window.grab())
         self.setGeometry(window.rect())
         self._center()
 
@@ -50,7 +74,9 @@ class Overlay(QWidget):
 
     def paintEvent(self, _):  # noqa: N802
         p = QPainter(self)
-        p.fillRect(self.rect(), QColor(23, 42, 58, 115))
+        p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+        p.drawPixmap(self.rect(), self._backdrop)
+        p.fillRect(self.rect(), QColor(23, 42, 58, 70))
 
     def mousePressEvent(self, e):  # noqa: N802
         if self._dismiss and not self._content.geometry().contains(e.position().toPoint()):
