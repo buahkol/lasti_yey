@@ -52,7 +52,8 @@ class ProdukPage(Page):
         self._ctrl = controller
         self._win = window_getter
         self.products = self._ctrl.products()
-        self.current = 0
+        self.current: int | None = None
+        self.creating = False
         self.date_btn = Button("Hari ini, 25 Nov 2026", "outline", "md", "calendar")
         self.date_btn.clicked.connect(self._pick_date)
         self.actions.addWidget(self.date_btn)
@@ -75,9 +76,10 @@ class ProdukPage(Page):
         self._fill_table()
         left.addWidget(self.table, 1)
         body.add(left_w, 1)
-        body.add(self._form(), 0, fixed_width=400)
+        self.form = self._form()
+        body.add(self.form, 0, fixed_width=400)
         self.body.addWidget(body, 1)
-        self._load(0)
+        self.form.hide()
 
     def _fill_table(self) -> None:
         self.table.clear_rows()
@@ -102,7 +104,9 @@ class ProdukPage(Page):
         self.form_caption = text("", Type.CAPTION, Color.TEXT_TERTIARY)
         col.addWidget(self.form_caption)
         head.addLayout(col, 1)
-        head.addWidget(IconButton("x", "Tutup formulir", "soft"), 0, Qt.AlignmentFlag.AlignTop)
+        close = IconButton("x", "Tutup formulir", "soft")
+        close.clicked.connect(self._close_form)
+        head.addWidget(close, 0, Qt.AlignmentFlag.AlignTop)
         card.layout_.addLayout(head)
         self.f_sku = InputField("SKU", "Contoh: SDN-TMT-155", "", "package",
                                 helper="SKU tidak dapat diubah setelah dipakai batch.")
@@ -125,7 +129,7 @@ class ProdukPage(Page):
         card.layout_.addStretch(1)
         row = hbox(10)
         cancel = Button("Batal", "outline")
-        cancel.clicked.connect(lambda: self._load(self.current))
+        cancel.clicked.connect(self._close_form)
         save = Button("Simpan perubahan", "primary")
         save.clicked.connect(self._save)
         for b in (cancel, save):
@@ -134,8 +138,18 @@ class ProdukPage(Page):
         card.layout_.addLayout(row)
         return card
 
+    def _close_form(self) -> None:
+        self.form.hide()
+        self.current = None
+        self.creating = False
+        self.table.select(-1)
+        for f in (self.f_sku, self.f_name, self.f_price):
+            f.set_error(None)
+
     def _load(self, index: int) -> None:
         self.current = index
+        self.creating = False
+        self.form.show()
         p = self.products[index]
         self.table.select(index)
         self.form_title.setText("Ubah produk")
@@ -148,17 +162,20 @@ class ProdukPage(Page):
             f.set_error(None)
 
     def _new(self) -> None:
-        self.current = -1
+        self.current = None
+        self.creating = True
+        self.form.show()
         self.table.select(-1)
         self.form_title.setText("Tambah produk")
         self.form_caption.setText("Produk baru muncul di pilihan saat membuat batch")
         for f in (self.f_sku, self.f_name, self.f_price):
             f.edit.clear()
+            f.set_error(None)
         self.f_sku.setEnabled(True)
         self.f_sku.edit.setFocus()
 
     def _save(self) -> None:
-        is_new = self.current == -1
+        is_new = self.creating
         for f in (self.f_sku, self.f_name, self.f_price):
             f.set_error(None)
         product, errors = self._ctrl.save(self.f_sku.value(), self.f_name.value(), self.f_price.value(), is_new)
@@ -168,9 +185,8 @@ class ProdukPage(Page):
         if product is None:
             return
         self.products = self._ctrl.products()
-        self.current = self.products.index(product)
         self._fill_table()
-        self._load(self.current)
+        self._close_form()
         toast(self._win(), "success", "Produk tersimpan", f"Perubahan {product.sku} berhasil disimpan.")
 
     def _pick_date(self) -> None:
