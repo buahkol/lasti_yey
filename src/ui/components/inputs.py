@@ -1,7 +1,7 @@
 """Form controls: InputField, SearchField, Checkbox, RadioOption, SegmentedTabs."""
 
 from PyQt6.QtCore import QEvent, QRectF, QSize, Qt, pyqtSignal
-from PyQt6.QtGui import QColor, QKeySequence, QPainter, QPen, QShortcut
+from PyQt6.QtGui import QColor, QPainter, QPen
 from PyQt6.QtWidgets import (
     QAbstractButton, QButtonGroup, QFrame, QLabel, QLineEdit, QPushButton, QSizePolicy,
     QToolButton, QWidget,
@@ -110,7 +110,7 @@ class InputField(QWidget):
 
 
 class SearchField(QFrame):
-    """Pill search box with keyboard shortcut hint."""
+    """Pill search box."""
 
     def __init__(self, placeholder: str = "Cari kode batch", width: int = 300, parent: QWidget | None = None):
         super().__init__(parent)
@@ -119,25 +119,13 @@ class SearchField(QFrame):
         self.setStyleSheet(
             f"QFrame#Search {{ background: {Color.SURFACE}; border: 1px solid {Color.BORDER}; border-radius: 22px; }}"
         )
-        lay = hbox(10, (16, 0, 8, 0), self)
+        lay = hbox(10, (16, 0, 16, 0), self)
         ic = QLabel()
         ic.setPixmap(pixmap("search", Color.ICON, 18))
         lay.addWidget(ic)
         self.edit = QLineEdit()
         self.edit.setPlaceholderText(placeholder)
         lay.addWidget(self.edit, 1)
-        hint = text("Ctrl K", Type.CAPTION, Color.TEXT_SECONDARY)
-        hint.setFixedHeight(26)
-        hint.setStyleSheet(
-            f"color: {Color.TEXT_SECONDARY}; background: {Color.CANVAS_ALT}; border-radius: 8px; padding: 3px 8px;"
-        )
-        lay.addWidget(hint)
-        shortcut = QShortcut(QKeySequence("Ctrl+K"), self)
-        shortcut.activated.connect(self._focus)
-
-    def _focus(self) -> None:
-        self.edit.setFocus()
-        self.edit.selectAll()
 
 
 class Checkbox(QAbstractButton):
