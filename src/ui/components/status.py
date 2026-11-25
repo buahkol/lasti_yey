@@ -95,3 +95,12 @@ class UserChip(QFrame):
         chevron = QLabel()
         chevron.setPixmap(pixmap("chevron-down", Color.ICON, 16))
         lay.addWidget(chevron)
+
+
+def event_kind(kind: str) -> QWidget:
+    w = QWidget()
+    lay = hbox(8, (0, 0, 0, 0), w)
+    dot = _Dot(Color.CHART_NG if kind == "REJECT" else TONES["amber"].solid)
+    lay.addWidget(dot)
+    lay.addWidget(text(kind.replace("_", " "), Type.BODY_STRONG))
+    return w

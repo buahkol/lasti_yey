@@ -7,8 +7,11 @@ controllers and views do not need to change.
 
 from .auth_service import AuthService
 from .batch_service import BatchService
+from .event_service import EventService
 from .inspection_service import InspectionService
 from .product_service import ProductService
 from .report_service import ReportService
+from .shipment_service import ShipmentService
 
-__all__ = ["AuthService", "BatchService", "InspectionService", "ProductService", "ReportService"]
+__all__ = ["AuthService", "BatchService", "EventService", "InspectionService", "ProductService", "ReportService",
+           "ShipmentService"]

@@ -5,6 +5,7 @@ from PyQt6.QtWidgets import QFrame, QSizePolicy, QWidget
 
 from ..theme import TONES, Color, Type
 from .base import add_shadow, hbox, text, vbox
+from .buttons import IconButton
 
 
 class _Row(QFrame):
@@ -63,8 +64,12 @@ class DataTable(QFrame):
             title.layout().setContentsMargins(20, 0, 16, 10)
             self._lay.addWidget(title)
         self._head = _Row(header=True)
-        self._fill(self._head, [text(c[0], Type.OVERLINE, Color.TEXT_TERTIARY) for c in columns], 9)
+        self._fill(self._head, [text(c[0], Type.LABEL, Color.TEXT_TERTIARY) for c in columns], 9)
         self._lay.addWidget(self._head)
+        self._empty = text("", Type.BODY, Color.TEXT_TERTIARY)
+        self._empty.setContentsMargins(20, 18, 16, 18)
+        self._empty.hide()
+        self._lay.addWidget(self._empty)
         self._end = QWidget()
         self._lay.addWidget(self._end, 1)
 
@@ -108,7 +113,7 @@ class DataTable(QFrame):
         row.set_selected(selected)
         idx = len(self.rows)
         row.clicked.connect(lambda: self.row_clicked.emit(idx))
-        self._lay.insertWidget(self._lay.indexOf(self._end), row)
+        self._lay.insertWidget(self._lay.indexOf(self._empty), row)
         self.rows.append(row)
         return row
 
@@ -121,6 +126,10 @@ class DataTable(QFrame):
             r.deleteLater()
         self.rows = []
 
+    def set_empty(self, message: str | None) -> None:
+        self._empty.setText(message or "")
+        self._empty.setVisible(bool(message))
+
     def add_footer(self, widget: QWidget) -> None:
         self._lay.addWidget(widget)
 
@@ -131,3 +140,31 @@ def two_line(primary: str, secondary: str, strong: bool = True) -> QWidget:
     lay.addWidget(text(primary, Type.BODY_STRONG if strong else Type.BODY))
     lay.addWidget(text(secondary, Type.CAPTION, Color.TEXT_TERTIARY))
     return w
+
+
+class TableFooter(QFrame):
+    page_changed = pyqtSignal(int)
+
+    def __init__(self):
+        super().__init__()
+        self.setObjectName("Foot")
+        self.setStyleSheet(f"QFrame#Foot {{ border: none; border-top: 1px solid {Color.BORDER}; }}")
+        lay = hbox(6, (20, 10, 16, 10), self)
+        self.caption = text("", Type.CAPTION, Color.TEXT_TERTIARY)
+        self.caption.setWordWrap(True)
+        lay.addWidget(self.caption, 1)
+        self.prev = IconButton("chevron-left", "Halaman sebelumnya", "outline", 36)
+        self.next = IconButton("chevron-right", "Halaman berikutnya", "outline", 36)
+        lay.addWidget(self.prev)
+        lay.addWidget(self.next)
+        self.index = 0
+        self.prev.clicked.connect(lambda: self.page_changed.emit(self.index - 1))
+        self.next.clicked.connect(lambda: self.page_changed.emit(self.index + 1))
+
+    def update_state(self, caption: str, index: int, pages: int) -> None:
+        self.caption.setText(caption)
+        self.index = index
+        self.prev.setEnabled(index > 0)
+        self.next.setEnabled(index < pages - 1)
+        self.prev.setVisible(pages > 1)
+        self.next.setVisible(pages > 1)

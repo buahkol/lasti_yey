@@ -117,11 +117,7 @@ class Sidebar(QFrame):
         self.buttons: dict = {}
         self.section_labels = []
         self.dividers = []
-        for title, items in (("Operasional", NAV_MAIN), ("Lainnya", NAV_OTHER)):
-            lab = text(title, Type.OVERLINE, Color.TEXT_TERTIARY)
-            lab.setContentsMargins(14, 8, 0, 4)
-            lay.addWidget(lab)
-            self.section_labels.append(lab)
+        for items in (NAV_MAIN, NAV_OTHER):
             div = QFrame()
             div.setFixedSize(32, 1)
             div.setStyleSheet(f"background: {Color.BORDER};")

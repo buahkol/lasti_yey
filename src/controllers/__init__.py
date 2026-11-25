@@ -2,13 +2,18 @@
 
 from dataclasses import dataclass
 
-from ..services import AuthService, BatchService, InspectionService, ProductService, ReportService
+from ..services import (
+    AuthService, BatchService, EventService, InspectionService, ProductService, ReportService, ShipmentService,
+)
 from .alert_controller import AlertController
 from .auth_controller import AuthController
 from .batch_controller import BatchController, CreateResult
 from .dashboard_controller import DashboardController
+from .event_controller import EventController
+from .history_controller import HistoryController
 from .product_controller import ProductController
 from .report_controller import ReportController
+from .shipment_controller import ShipmentController
 
 
 @dataclass
@@ -19,6 +24,9 @@ class Controllers:
     batches: BatchController
     alerts: AlertController
     reports: ReportController
+    events: EventController
+    shipments: ShipmentController
+    history: HistoryController
 
     @classmethod
     def create(cls) -> "Controllers":
@@ -32,10 +40,14 @@ class Controllers:
             batches=BatchController(batches, products),
             alerts=AlertController(inspections),
             reports=ReportController(reports, batches, products),
+            events=EventController(EventService(), batches),
+            shipments=ShipmentController(ShipmentService(), batches),
+            history=HistoryController(inspections, batches),
         )
 
 
 __all__ = [
     "Controllers", "AuthController", "DashboardController", "ProductController", "BatchController",
-    "CreateResult", "AlertController", "ReportController",
+    "CreateResult", "AlertController", "ReportController", "EventController", "ShipmentController",
+    "HistoryController",
 ]

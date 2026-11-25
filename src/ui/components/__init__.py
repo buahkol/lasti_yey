@@ -9,13 +9,13 @@ from .layout import AdaptiveRow, ResponsiveGrid
 from .inputs import Checkbox, InputField, RadioOption, SearchField, SegmentedTabs
 from .photo import AlertRow, CanPhoto, DefectCard
 from .progress import ProgressBar
-from .status import Badge, LiveIndicator, UserChip
-from .table import DataTable, two_line
+from .status import Badge, LiveIndicator, UserChip, event_kind
+from .table import DataTable, TableFooter, two_line
 
 __all__ = [
     "Card", "Divider", "add_shadow", "hbox", "vbox", "text", "set_text_color", "spacer",
     "Button", "IconButton", "PanelHeader", "StatCard", "DatePicker", "format_range",
     "ModalCard", "Overlay", "StatusDialog", "Toast", "show_status", "toast",
     "Checkbox", "InputField", "RadioOption", "SearchField", "SegmentedTabs",
-    "DataTable", "two_line", "AdaptiveRow", "ResponsiveGrid", "AlertRow", "CanPhoto", "DefectCard", "ProgressBar", "Badge", "LiveIndicator", "UserChip",
+    "DataTable", "TableFooter", "two_line", "AdaptiveRow", "ResponsiveGrid", "AlertRow", "CanPhoto", "DefectCard", "ProgressBar", "Badge", "LiveIndicator", "UserChip", "event_kind",
 ]

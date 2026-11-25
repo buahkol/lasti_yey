@@ -4,9 +4,11 @@ Used by the services until the REST API (/api/v1) is connected. Each block
 names the endpoint that will provide it.
 """
 
-from datetime import date, datetime
+import random
+import re
+from datetime import date, datetime, timedelta
 
-from ..models import Alert, Batch, Product, ProductionEvent, User
+from ..models import Alert, Batch, Inspection, Product, ProductionEvent, Shipment, User
 
 TODAY = date(2026, 11, 25)
 
@@ -96,3 +98,80 @@ BATCH_REPORTS = {
                        Alert("B-2411-02", "10.12.30", 0.72, 0.64, "label", _CBI)],
     },
 }
+
+
+
+def _event(time, kind, note):
+    return ProductionEvent(time, kind, "AI" if kind == "REJECT" else "Operator", note)
+
+
+EVENTS = {
+    "B-2411-02": [
+        _event("10.42", "REJECT", "Skor 0,87 melewati ambang 0,64"),
+        _event("10.36", "REJECT", "Skor 0,93 melewati ambang 0,64"),
+        _event("10.12", "REJECT", "Skor 0,77 melewati ambang 0,64"),
+        _event("09.58", "ALAT_BERHENTI", "Penyetelan ulang penahan kaleng selama 6 menit"),
+        _event("09.41", "REJECT", "Skor 0,71 melewati ambang 0,64"),
+        _event("09.12", "BAHAN_BAKU_HABIS", "Menunggu kiriman label selama 8 menit"),
+        _event("08.47", "REJECT", "Skor 0,72 melewati ambang 0,64"),
+        _event("08.15", "REJECT", "Skor 0,69 melewati ambang 0,64"),
+        _event("07.58", "REJECT", "Skor 0,70 melewati ambang 0,64"),
+        _event("07.44", "REJECT", "Skor 0,66 melewati ambang 0,64"),
+        _event("07.39", "REJECT", "Skor 0,68 melewati ambang 0,64"),
+    ],
+    "B-2411-01": [
+        _event("10.42", "REJECT", "Skor 0,87 melewati ambang 0,62"),
+        _event("10.39", "REJECT", "Skor 0,81 melewati ambang 0,62"),
+        _event("10.31", "REJECT", "Skor 0,74 melewati ambang 0,62"),
+        _event("10.15", "REJECT", "Skor 0,68 melewati ambang 0,62"),
+        _event("09.20", "ALAT_BERHENTI", "Konveyor berhenti selama 4 menit karena sabuk longgar"),
+        _event("08.05", "REJECT", "Skor 0,70 melewati ambang 0,62"),
+    ],
+    "B-2410-26": [
+        _event("13.48", "REJECT", "Skor 0,79 melewati ambang 0,62"),
+        _event("11.02", "BAHAN_BAKU_HABIS", "Menunggu kaleng kosong dari gudang selama 12 menit"),
+        _event("09.37", "REJECT", "Skor 0,73 melewati ambang 0,62"),
+    ],
+}
+
+
+def _at(value: str) -> datetime:
+    return datetime.strptime(value, "%Y-%m-%d %H.%M")
+
+
+SHIPMENTS = [
+    Shipment(17, "PO-2611-017", ["B-2410-22", "B-2410-23"], 1540, _at("2026-11-25 09.15")),
+    Shipment(16, "PO-2611-016", ["B-2410-25"], 851, _at("2026-11-25 08.20")),
+    Shipment(15, "PO-2611-015", ["B-2410-24"], 600, _at("2026-11-24 15.10")),
+    Shipment(14, "PO-2611-014", ["B-2410-24"], 666, _at("2026-11-24 09.30")),
+    Shipment(13, "PO-2611-013", ["B-2410-19", "B-2410-20"], 1800, _at("2026-11-24 07.45")),
+]
+
+
+def _minutes(duration: str) -> int:
+    hours = re.search(r"(\d+) jam", duration)
+    minutes = re.search(r"(\d+) menit", duration)
+    return (int(hours[1]) * 60 if hours else 0) + (int(minutes[1]) if minutes else 0)
+
+
+def inspection_history(batch_code: str) -> list[Inspection]:
+    first_id = 1
+    for batch in sorted(BATCHES, key=lambda b: b.started_at):
+        if batch.code == batch_code:
+            break
+        first_id += batch.output
+    else:
+        return []
+    threshold = next(p.threshold for p in PRODUCTS if p.sku == batch.sku)
+    rnd = random.Random(batch_code)
+    ng = set(rnd.sample(range(batch.output), batch.ng_count))
+    step = _minutes(batch.duration) * 60 / max(batch.output, 1)
+    rows = []
+    for i in range(batch.output):
+        when = batch.started_at + timedelta(seconds=round(step * (i + 0.5)))
+        if i in ng:
+            score, result, defect = rnd.uniform(threshold + 0.01, 0.95), "NG", rnd.choice(["dent", "rust", "label"])
+        else:
+            score, result, defect = rnd.uniform(0.18, threshold - 0.06), "OK", "none"
+        rows.append(Inspection(first_id + i, batch_code, result, round(score, 2), when, defect))
+    return rows[::-1]

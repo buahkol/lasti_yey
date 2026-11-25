@@ -13,9 +13,12 @@ from .components import toast
 from .pages.alert import AlertPage
 from .pages.batch import BatchPage
 from .pages.dashboard import DashboardPage
+from .pages.kejadian import KejadianPage
 from .pages.laporan import LaporanPage
 from .pages.login import LoginPage
+from .pages.pengiriman import PengirimanPage
 from .pages.produk import ProdukPage
+from .pages.riwayat import RiwayatPage
 from .shell import AppWindow
 from .theme import apply_theme
 from .theme.scale import choose_scale
@@ -43,6 +46,9 @@ class SiMonProApp:
         win.add_page("batch", BatchPage(c.batches, getter, lambda code: (win.go("laporan"), laporan.show_batch(code))))
         win.add_page("alert", AlertPage(c.alerts, getter))
         win.add_page("laporan", laporan)
+        win.add_page("kejadian", KejadianPage(c.events, getter))
+        win.add_page("pengiriman", PengirimanPage(c.shipments, getter))
+        win.add_page("riwayat", RiwayatPage(c.history, getter))
         win.logout_requested.connect(self._logout)
         win.go("dashboard")
         win.showMaximized()

@@ -100,7 +100,7 @@ class AppWindow(QWidget):
         page = self.pages.get(key)
         if page is None:
             from ..components import toast
-            toast(self, "info", "Halaman belum tersedia", "Halaman ini dikerjakan pada Desktop P2.")
+            toast(self, "info", "Halaman belum tersedia", "Halaman ini belum tersedia.")
             self.sidebar.set_active(self.stack.currentWidget().property("pageKey") or "dashboard")
             return
         page.setProperty("pageKey", key)
@@ -108,6 +108,12 @@ class AppWindow(QWidget):
         self.sidebar.set_active(key)
         if hasattr(page, "on_show"):
             page.on_show()
+
+    def open_batch(self, key: str, code: str) -> None:
+        self.go(key)
+        page = self.pages.get(key)
+        if page is not None and hasattr(page, "show_batch"):
+            page.show_batch(code)
 
     def paintEvent(self, _):  # noqa: N802
         paint_page_background(self)

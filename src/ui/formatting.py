@@ -19,3 +19,11 @@ def pct(value: float) -> str:
 def score(value: float) -> str:
     """0.87 -> '0,87'."""
     return f"{value:.2f}".replace(".", ",")
+
+
+_MONTHS = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"]
+
+
+def day(value, year: bool = False) -> str:
+    text = f"{value.day} {_MONTHS[value.month - 1]}"
+    return f"{text} {value.year}" if year else text

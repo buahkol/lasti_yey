@@ -105,8 +105,7 @@ def open_photo_viewer(window: QWidget, alert: Alert) -> Overlay:
 
     overlay = Overlay(window, card).open()
     close.clicked.connect(overlay.close_overlay)
-    hist.clicked.connect(lambda: (overlay.close_overlay(),
-                                  toast(window, "info", "Riwayat dan klaim", "Halaman ini dikerjakan pada Desktop P2.")))
+    hist.clicked.connect(lambda: (overlay.close_overlay(), window.open_batch("riwayat", batch)))
     return overlay
 
 

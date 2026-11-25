@@ -17,7 +17,7 @@ from ..assets import pixmap
 from ..charts import Gauge, PeakBarChart, StackedBarChart
 from ..components import (
     AdaptiveRow, AlertRow, Badge, Button, Card, DataTable, DatePicker, PanelHeader, ResponsiveGrid, SegmentedTabs,
-    StatCard, format_range, hbox, text, toast, two_line, vbox,
+    StatCard, event_kind, format_range, hbox, text, toast, two_line, vbox,
 )
 from ..shell import Page
 from ..theme import TONES, Color, Type
@@ -27,18 +27,6 @@ _MENU_STYLE = (f"QMenu {{ background: #FFFFFF; border: 1px solid {Color.BORDER};
                "QMenu::item { padding: 8px 14px; border-radius: 8px; }"
                f"QMenu::item:selected {{ background: {Color.BRAND_SOFT}; color: {Color.TEXT_PRIMARY}; }}")
 _TODAY = QDate(2026, 11, 25)
-
-
-def _event_kind(kind: str) -> QWidget:
-    w = QWidget()
-    lay = hbox(8, (0, 0, 0, 0), w)
-    dot = QFrame()
-    dot.setFixedSize(8, 8)
-    color = Color.CHART_NG if kind == "REJECT" else TONES["amber"].solid
-    dot.setStyleSheet(f"background: {color}; border-radius: 4px;")
-    lay.addWidget(dot)
-    lay.addWidget(text(kind.replace("_", " "), Type.BODY_STRONG))
-    return w
 
 
 def _note(held: bool, message: str) -> QFrame:
@@ -200,12 +188,11 @@ class LaporanPage(Page):
 
         row3 = AdaptiveRow(breakpoint=1000)
         ph = PanelHeader("Kejadian produksi", f"{r['events']} kejadian, REJECT dicatat otomatis oleh AI", "Lihat kejadian")
-        ph.action_clicked.connect(lambda: toast(self._win(), "info", "Halaman Kejadian",
-                                                "Halaman ini dikerjakan pada Desktop P2."))
+        ph.action_clicked.connect(lambda: self._win().open_batch("kejadian", self.code))
         events = DataTable([("Waktu", 10, "L"), ("Jenis", 20, "L"), ("Sumber", 14, "L"), ("Keterangan", 40, "L")],
                            ph, row_padding=10)
         for e in r["events_list"]:
-            events.add_row([text(e.time, Type.BODY_STRONG), _event_kind(e.kind), text(e.source, Type.BODY),
+            events.add_row([text(e.time, Type.BODY_STRONG), event_kind(e.kind), text(e.source, Type.BODY),
                             text(e.note, Type.BODY, Color.TEXT_SECONDARY)])
         row3.add(events, 1)
         top = Card((10, 16, 10, 12), 4)

@@ -8,7 +8,7 @@ from ...controllers import AlertController
 from .. import formatting as fmt
 from ..assets import pixmap
 from ..components import (
-    AdaptiveRow, Button, DefectCard, LiveIndicator, ResponsiveGrid, SegmentedTabs, StatCard, hbox, text, toast, vbox,
+    AdaptiveRow, Button, DefectCard, LiveIndicator, ResponsiveGrid, SegmentedTabs, StatCard, hbox, text, vbox,
 )
 from ..shell import Page
 from ..theme import Color, Type
@@ -100,5 +100,4 @@ class AlertPage(Page):
             card = DefectCard(al.batch, al.time, al.score, al.threshold, al.defect, highlight=i == 0 and batch is None)
             card.clicked.connect(lambda a=al: open_photo_viewer(self._win(), a))
             self.grid.add(card)
-        self.grid.add(_OlderTile(lambda: toast(self._win(), "info", "Riwayat dan klaim",
-                                               "Halaman ini dikerjakan pada Desktop P2.")))
+        self.grid.add(_OlderTile(lambda: self._win().go("riwayat")))

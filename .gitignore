@@ -56,7 +56,7 @@ local_*
 !.env.example
 
 # SiMonPro runtime data (models, datasets, inspection images)
-models/
+/models/
 dataset/
 storage/
 doc/model_eval/*/scores.csv
