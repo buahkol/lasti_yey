@@ -2,12 +2,12 @@
 
 import re
 
-from PyQt6.QtCore import QDate
+from PyQt6.QtCore import QDate, Qt
 from PyQt6.QtWidgets import QFrame, QMenu, QSizePolicy, QWidget
 
 from .. import mock_data as data
 from ..components import (
-    Badge, Button, DataTable, DatePicker, IconButton, InputField, ModalCard, Overlay, ProgressBar, SearchField,
+    AdaptiveRow, Badge, Button, DataTable, DatePicker, IconButton, InputField, ModalCard, Overlay, ProgressBar, SearchField,
     SegmentedTabs, format_range, hbox, show_status, text, two_line, vbox,
 )
 from ..shell import Page
@@ -36,22 +36,25 @@ class BatchPage(Page):
         create.clicked.connect(self._create_dialog)
         self.actions.addWidget(create)
 
-        bar = hbox(12)
+        bar = AdaptiveRow(spacing=12)
         self.tabs = SegmentedTabs(self._tab_items())
         self.tabs.changed.connect(self._on_tab)
-        bar.addWidget(self.tabs)
-        bar.addStretch(1)
+        bar.add(self.tabs, 0, align=Qt.AlignmentFlag.AlignLeft)
+        bar.add_stretch()
+        tools = QWidget()
+        t_lay = hbox(12, (0, 0, 0, 0), tools)
         self.product_btn = Button("Semua produk", "outline", "md", "filter")
         self.product_btn.clicked.connect(self._product_menu)
-        bar.addWidget(self.product_btn)
+        t_lay.addWidget(self.product_btn)
         export = Button("Ekspor PDF", "secondary", "md", "download")
         export.clicked.connect(lambda: open_export_pdf(self._win()))
-        bar.addWidget(export)
-        self.body.addLayout(bar)
+        t_lay.addWidget(export)
+        bar.add(tools, 0, align=Qt.AlignmentFlag.AlignLeft)
+        self.body.addWidget(bar)
 
         self.table = DataTable(
-            [("Kode batch", 10, "L"), ("Produk", 15, "L"), ("Waktu", 11, "L"), ("Output", 7, "R"),
-             ("Persentase NG", 17, "F", 32), ("Batch", 9, "L"), ("Inspeksi", 9, "L"), ("", 10, "R", 0)],
+            [("Kode batch", 10, "L"), ("Produk", 16, "L"), ("Waktu", 11, "L", None, 1180), ("Output", 7, "R"),
+             ("Persentase NG", 17, "F", 32), ("Batch", 9, "L"), ("Inspeksi", 9, "L"), ("", 11, "R", 0)],
             row_padding=10)
         footer = QFrame()
         footer.setObjectName("Foot")
