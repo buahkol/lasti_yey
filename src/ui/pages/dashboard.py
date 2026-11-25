@@ -8,8 +8,8 @@ from .. import mock_data as data
 from ..assets import icon
 from ..charts import StackedBarChart
 from ..components import (
-    AlertRow, Badge, Button, Card, LiveIndicator, PanelHeader, ProgressBar, SearchField, StatCard, UserChip,
-    hbox, text, vbox,
+    AdaptiveRow, AlertRow, Badge, Button, Card, LiveIndicator, PanelHeader, ProgressBar, ResponsiveGrid, SearchField,
+    StatCard, UserChip, hbox, text, vbox,
 )
 from ..shell import Page
 from ..theme import NG_TOLERANCE_PERCENT, TONES, Color, Type
@@ -21,7 +21,8 @@ class BatchHero(QFrame):
 
     def __init__(self, on_report, on_close):
         super().__init__()
-        self.setMinimumWidth(640)
+        self.setMinimumWidth(460)
+        self.setMinimumHeight(250)
         self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
         b = data.ACTIVE_BATCH
         lay = vbox(0, (28, 24, 28, 24), self)
@@ -97,28 +98,26 @@ class DashboardPage(Page):
         self.actions.addWidget(UserChip(u["name"], u["role"], u["initials"]))
 
         s = data.DASHBOARD_STATS
-        row1 = hbox(16)
+        row1 = AdaptiveRow(breakpoint=1280)
         hero = BatchHero(lambda: navigate("laporan"),
                          lambda: confirm_close_batch(self._win(), data.ACTIVE_BATCH["code"]))
-        row1.addWidget(hero, 5)
-        grid = vbox(16)
-        r_a, r_b = hbox(16), hbox(16)
-        r_a.addWidget(StatCard("blue", "package", "Total output hari ini", data.num(s["output"]), "kaleng",
-                               s["output_delta"], f"sejak pukul {s['output_since']}", "trend-up"))
-        r_a.addWidget(StatCard("indigo", "check-circle", "Kaleng OK", data.num(s["ok"]), "kaleng",
-                               data.pct(s["ok_percent"]), "dari total inspeksi"))
-        r_b.addWidget(StatCard("pink", "warning", "Kaleng NG", data.num(s["ng"]), "kaleng",
-                               data.pct(s["ng_percent"]), f"batas toleransi {NG_TOLERANCE_PERCENT:g}%",
-                               highlight_value=True))
-        r_b.addWidget(StatCard("amber", "activity", "Kejadian produksi", str(s["events"]), "kejadian",
-                               f"{s['events_reject']} REJECT", "dicatat otomatis"))
-        grid.addLayout(r_a)
-        grid.addLayout(r_b)
-        row1.addLayout(grid, 6)
-        self.body.addLayout(row1)
+        row1.add(hero, 5)
+        grid = ResponsiveGrid(220, 4, 16, steps=(4, 2, 1))
+        grid.add(StatCard("blue", "package", "Total output hari ini", data.num(s["output"]), "kaleng",
+                          s["output_delta"], f"sejak pukul {s['output_since']}", "trend-up"))
+        grid.add(StatCard("indigo", "check-circle", "Kaleng OK", data.num(s["ok"]), "kaleng",
+                          data.pct(s["ok_percent"]), "dari total inspeksi"))
+        grid.add(StatCard("pink", "warning", "Kaleng NG", data.num(s["ng"]), "kaleng",
+                          data.pct(s["ng_percent"]), f"batas toleransi {NG_TOLERANCE_PERCENT:g}%",
+                          highlight_value=True))
+        grid.add(StatCard("amber", "activity", "Kejadian produksi", str(s["events"]), "kejadian",
+                          f"{s['events_reject']} REJECT", "dicatat otomatis"))
+        row1.add(grid, 6)
+        self.body.addWidget(row1)
 
-        row2 = hbox(16)
-        left = vbox(16)
+        row2 = AdaptiveRow(breakpoint=1200)
+        left_w = QWidget()
+        left = vbox(16, (0, 0, 0, 0), left_w)
         chart_card = Card((20, 16, 20, 14), 8)
         head = hbox(16)
         col = vbox(2)
@@ -132,9 +131,9 @@ class DashboardPage(Page):
         chart_card.add(StackedBarChart(data.OUTPUT_PER_HOUR, data.CURRENT_HOUR_INDEX), 1)
         left.addWidget(chart_card, 1)
         left.addWidget(self._today_batches(navigate))
-        row2.addLayout(left, 1)
-        row2.addWidget(self._alerts(navigate))
-        self.body.addLayout(row2, 1)
+        row2.add(left_w, 1)
+        row2.add(self._alerts(navigate), 0, fixed_width=420)
+        self.body.addWidget(row2, 1)
 
         self._seconds = 2
         self._timer = QTimer(self)
@@ -162,7 +161,7 @@ class DashboardPage(Page):
             c1.addWidget(text(b["product"], Type.CAPTION, Color.TEXT_TERTIARY))
             w1 = QWidget()
             w1.setLayout(c1)
-            w1.setFixedWidth(200)
+            w1.setFixedWidth(170)
             lay.addWidget(w1)
             c2 = vbox(0)
             c2.addWidget(text(data.num(b["output"]), Type.BODY_STRONG, align=Qt.AlignmentFlag.AlignRight))
@@ -178,14 +177,13 @@ class DashboardPage(Page):
             badge_box.addWidget(Badge(b["status"]))
             w = QWidget()
             w.setLayout(badge_box)
-            w.setFixedWidth(110)
+            w.setFixedWidth(100)
             lay.addWidget(w)
             card.add(row)
         return card
 
     def _alerts(self, navigate) -> Card:
         card = Card((10, 16, 10, 12), 4)
-        card.setFixedWidth(460)
         ph = PanelHeader("Alert kemasan cacat", f"{data.ALERT_SUMMARY['ng_30min']} kaleng NG dalam 30 menit terakhir",
                          "Lihat semua")
         ph.layout().setContentsMargins(10, 0, 0, 6)
