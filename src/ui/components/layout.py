@@ -1,5 +1,6 @@
 """Responsive layout helpers (Tailwind style breakpoints for Qt widgets)."""
 
+from PyQt6.QtCore import QSize
 from PyQt6.QtWidgets import QBoxLayout, QGridLayout, QSizePolicy, QWidget
 
 _MAX = 16777215
@@ -59,18 +60,28 @@ class AdaptiveRow(QWidget):
                 else:
                     w.setFixedWidth(fw)
 
+    def minimumSizeHint(self) -> QSize:  # noqa: N802
+        # Report the stacked width so a narrow window can shrink the row and trigger stacking.
+        widths = [w.minimumSizeHint().width() for w, _, fw, _ in self._items if not fw]
+        return QSize(max(widths, default=0), super().minimumSizeHint().height())
+
     def resizeEvent(self, e):  # noqa: N802
         self._apply(not self._fits(e.size().width()))
         super().resizeEvent(e)
 
 
 class ResponsiveGrid(QWidget):
-    """Equal width columns; the column count drops as the grid gets narrower."""
+    """Equal width columns; the column count drops as the grid gets narrower.
 
-    def __init__(self, min_item_width: int, max_columns: int, spacing: int = 16):
+    steps limits the allowed column counts, for example (4, 2, 1) so four
+    stat cards never end up as a row of three plus one.
+    """
+
+    def __init__(self, min_item_width: int, max_columns: int, spacing: int = 16, steps: tuple | None = None):
         super().__init__()
         self.min_item_width = min_item_width
         self.max_columns = max_columns
+        self.steps = sorted(steps or range(1, max_columns + 1), reverse=True)
         self._grid = QGridLayout(self)
         self._grid.setContentsMargins(0, 0, 0, 0)
         self._grid.setSpacing(spacing)
@@ -98,9 +109,12 @@ class ResponsiveGrid(QWidget):
         for c in range(self.max_columns):
             self._grid.setColumnStretch(c, 1 if c < self._columns else 0)
 
+    def minimumSizeHint(self) -> QSize:  # noqa: N802
+        return QSize(self.min_item_width, super().minimumSizeHint().height())
+
     def resizeEvent(self, e):  # noqa: N802
         cols = (e.size().width() + self._spacing) // (self.min_item_width + self._spacing)
-        cols = max(1, min(self.max_columns, cols))
+        cols = next((c for c in self.steps if c <= cols), self.steps[-1])
         if cols != self._columns:
             self._columns = cols
             self._place()
