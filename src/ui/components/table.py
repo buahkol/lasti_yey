@@ -3,7 +3,7 @@
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import QFrame, QSizePolicy, QWidget
 
-from ..theme import TONES, Color, Type
+from ..theme import TONES, Color, Radius, Type
 from .base import add_shadow, hbox, text, vbox
 from .buttons import IconButton
 
@@ -11,10 +11,11 @@ from .buttons import IconButton
 class _Row(QFrame):
     clicked = pyqtSignal()
 
-    def __init__(self, header: bool = False):
+    def __init__(self, header: bool = False, round_top: bool = False):
         super().__init__()
         self.setObjectName("TRow")
         self.header = header
+        self.round_top = round_top
         self.selected = False
         if not header:
             self.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -26,7 +27,9 @@ class _Row(QFrame):
 
     def _style(self) -> None:
         if self.header:
-            self.setStyleSheet(f"QFrame#TRow {{ background: {Color.SUBTLE}; border: none; }}")
+            radius = f"border-top-left-radius: {Radius.CARD}px; border-top-right-radius: {Radius.CARD}px;" \
+                if self.round_top else ""
+            self.setStyleSheet(f"QFrame#TRow {{ background: {Color.SUBTLE}; border: none; {radius} }}")
             return
         bg = "rgba(238,239,253,0.7)" if self.selected else "transparent"
         self.setStyleSheet(
@@ -59,11 +62,11 @@ class DataTable(QFrame):
         self.columns = columns
         self.row_padding = row_padding
         self.rows: list = []
-        self._lay = vbox(0, (0, 16 if title else 4, 0, 4), self)
+        self._lay = vbox(0, (0, 16 if title else 0, 0, 4), self)
         if title is not None:
             title.layout().setContentsMargins(20, 0, 16, 10)
             self._lay.addWidget(title)
-        self._head = _Row(header=True)
+        self._head = _Row(header=True, round_top=title is None)
         self._fill(self._head, [text(c[0], Type.LABEL, Color.TEXT_TERTIARY) for c in columns], 9)
         self._lay.addWidget(self._head)
         self._empty = text("", Type.BODY, Color.TEXT_TERTIARY)

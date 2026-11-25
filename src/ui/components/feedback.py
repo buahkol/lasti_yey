@@ -98,7 +98,7 @@ class ModalCard(QFrame):
         self.setFixedWidth(width)
         self.setStyleSheet(
             "QFrame#Modal { background: qlineargradient(x1:0, y1:0, x2:0, y2:0.35, "
-            "stop:0 rgba(220,221,251,0.6), stop:1 #FFFFFF); border-radius: 24px; }"
+            "stop:0 #EAEBFD, stop:1 #FFFFFF); border-radius: 24px; }"
         )
         add_shadow(self, "pop")
         self.body = vbox(spacing, padding, self)
