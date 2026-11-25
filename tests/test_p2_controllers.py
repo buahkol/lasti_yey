@@ -64,3 +64,9 @@ def test_history_counts_match_batch_and_filter():
 
 def test_history_unknown_batch_is_not_found():
     assert make().history.find("B-2499-01") is None
+
+
+def test_greeting_follows_time():
+    from src.controllers.dashboard_controller import DashboardController
+    greetings = [DashboardController.greeting(datetime(2026, 11, 25, h)) for h in (6, 12, 16, 19, 2)]
+    assert greetings == ["Selamat pagi", "Selamat siang", "Selamat sore", "Selamat malam", "Selamat malam"]

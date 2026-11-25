@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from ..models import Alert, Batch
 from ..services import BatchService, InspectionService, ReportService
 from .rules import NG_TOLERANCE_PERCENT
@@ -10,6 +12,17 @@ class DashboardController:
         self._reports = reports
         self._inspections = inspections
         self._batches = batches
+
+    @staticmethod
+    def greeting(now: datetime | None = None) -> str:
+        hour = (now or datetime.now()).hour
+        if 4 <= hour < 11:
+            return "Selamat pagi"
+        if 11 <= hour < 15:
+            return "Selamat siang"
+        if 15 <= hour < 18:
+            return "Selamat sore"
+        return "Selamat malam"
 
     def active_batch(self) -> Batch | None:
         return next((b for b in self._batches.list_batches() if b.running), None)

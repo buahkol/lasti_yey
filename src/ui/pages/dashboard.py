@@ -93,14 +93,17 @@ class BatchHero(QFrame):
 class DashboardPage(Page):
     def __init__(self, controller: DashboardController, batches: BatchController, user: User, navigate,
                  window_getter):
-        super().__init__(f"Selamat pagi, {user.name}")
+        super().__init__(f"{controller.greeting()}, {user.name}")
         self._ctrl = controller
         self._batches = batches
         self._win = window_getter
-        self.actions.addWidget(SearchField("Cari kode batch", 300))
+        self._user = user
+        self.search = SearchField("Cari kode batch", 300)
+        self.search.edit.returnPressed.connect(self._search)
+        self.actions.addWidget(self.search)
         self.live = LiveIndicator()
         self.actions.addWidget(self.live)
-        self.actions.addWidget(UserChip(user.name, user.role, user.initials))
+        self.actions.addWidget(UserChip(user.name, initials=user.initials))
 
         s = self._ctrl.stats()
         active = self._ctrl.active_batch()
@@ -153,6 +156,13 @@ class DashboardPage(Page):
         # FR-20: data refreshes every 5 seconds (mock: only the indicator changes)
         self._seconds = 0 if self._seconds >= 5 else self._seconds + 1
         self.live.set_text("Diperbarui baru saja" if self._seconds == 0 else f"Diperbarui {self._seconds} detik lalu")
+        self.title.setText(f"{self._ctrl.greeting()}, {self._user.name}")
+
+    def _search(self) -> None:
+        query = self.search.edit.text().strip()
+        if query:
+            self._win().open_search("batch", query)
+            self.search.edit.clear()
 
     def _today_batches(self, navigate) -> Card:
         card = Card((0, 14, 0, 4), 2)

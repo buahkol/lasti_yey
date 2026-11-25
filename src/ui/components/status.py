@@ -3,7 +3,6 @@
 from PyQt6.QtCore import QTimer, Qt
 from PyQt6.QtWidgets import QFrame, QLabel, QWidget
 
-from ..assets import pixmap
 from ..theme import STATUS_TONE, TONES, Color, Type, font
 from .base import hbox, text, vbox
 
@@ -73,8 +72,8 @@ class LiveIndicator(QFrame):
 class UserChip(QFrame):
     """Avatar with initials, name and role."""
 
-    def __init__(self, name: str = "Operasional", role: str = "Shift pagi, Lini 1",
-                 initials: str = "OP", parent: QWidget | None = None):
+    def __init__(self, name: str = "Operasional", role: str = "", initials: str = "OP",
+                 parent: QWidget | None = None):
         super().__init__(parent)
         self.setObjectName("UserChip")
         self.setStyleSheet(
@@ -90,11 +89,9 @@ class UserChip(QFrame):
         lay.addWidget(avatar)
         col = vbox(0)
         col.addWidget(text(name, Type.LABEL))
-        col.addWidget(text(role, Type.CAPTION, Color.TEXT_TERTIARY))
+        if role:
+            col.addWidget(text(role, Type.CAPTION, Color.TEXT_TERTIARY))
         lay.addLayout(col)
-        chevron = QLabel()
-        chevron.setPixmap(pixmap("chevron-down", Color.ICON, 16))
-        lay.addWidget(chevron)
 
 
 def event_kind(kind: str) -> QWidget:

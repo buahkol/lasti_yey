@@ -1,7 +1,7 @@
 """Form controls: InputField, SearchField, Checkbox, RadioOption, SegmentedTabs."""
 
 from PyQt6.QtCore import QEvent, QRectF, QSize, Qt, pyqtSignal
-from PyQt6.QtGui import QColor, QPainter, QPen
+from PyQt6.QtGui import QColor, QKeySequence, QPainter, QPen, QShortcut
 from PyQt6.QtWidgets import (
     QAbstractButton, QButtonGroup, QFrame, QLabel, QLineEdit, QPushButton, QSizePolicy,
     QToolButton, QWidget,
@@ -132,6 +132,12 @@ class SearchField(QFrame):
             f"color: {Color.TEXT_SECONDARY}; background: {Color.CANVAS_ALT}; border-radius: 8px; padding: 3px 8px;"
         )
         lay.addWidget(hint)
+        shortcut = QShortcut(QKeySequence("Ctrl+K"), self)
+        shortcut.activated.connect(self._focus)
+
+    def _focus(self) -> None:
+        self.edit.setFocus()
+        self.edit.selectAll()
 
 
 class Checkbox(QAbstractButton):

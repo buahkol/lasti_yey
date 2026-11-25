@@ -77,6 +77,12 @@ class BatchPage(Page):
     def on_show(self) -> None:
         self._render()
 
+    def show_search(self, query: str) -> None:
+        self.tabs.set_current(0)
+        self.filter_key = FILTERS[0][1]
+        self.search.edit.setText(query.upper())
+        self._reset_page()
+
     # data ----------------------------------------------------------------
     def _filters(self) -> dict:
         return {"sku": self.sku, "query": self.search.edit.text(),

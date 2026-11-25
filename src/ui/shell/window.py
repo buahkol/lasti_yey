@@ -115,5 +115,11 @@ class AppWindow(QWidget):
         if page is not None and hasattr(page, "show_batch"):
             page.show_batch(code)
 
+    def open_search(self, key: str, query: str) -> None:
+        self.go(key)
+        page = self.pages.get(key)
+        if page is not None and hasattr(page, "show_search"):
+            page.show_search(query)
+
     def paintEvent(self, _):  # noqa: N802
         paint_page_background(self)
