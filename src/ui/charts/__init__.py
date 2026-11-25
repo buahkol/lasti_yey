@@ -15,6 +15,11 @@ from PyQt6.QtWidgets import QSizePolicy, QWidget
 from ..theme import Color, Type, font
 
 
+def _num(value: float) -> str:
+    """Axis and tooltip numbers with a dot as thousands separator: 7500 -> '7.500'."""
+    return f"{value:,.0f}".replace(",", ".") if value == int(value) else f"{value:g}"
+
+
 def _grid_pen() -> QPen:
     pen = QPen(QColor(Color.CHART_GRID), 1)
     pen.setDashPattern([3, 4])
@@ -76,7 +81,7 @@ class _BarBase(QWidget):
             p.drawLine(QPointF(pr.left(), y), QPointF(pr.right(), y))
             p.setPen(QColor(Color.TEXT_TERTIARY))
             p.drawText(QRectF(0, y - 9, self._axis_w - 8, 18), Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
-                       f"{tv:g}")
+                       _num(tv))
         for i, lab in enumerate(self.labels):
             c = self._col(i)
             on = i == self.highlight
@@ -100,10 +105,13 @@ class _BarBase(QWidget):
 class StackedBarChart(_BarBase):
     """data: list of (label, ok, ng)."""
 
-    def __init__(self, data: list, highlight: int = 0, max_value: float = 200):
+    def __init__(self, data: list, highlight: int = 0, max_value: float = 200, title_prefix: str = "Pukul "):
         super().__init__([d[0] for d in data], highlight)
         self.data = data
         self.max_value = max_value
+        self.title_prefix = title_prefix
+        if max_value >= 1000:
+            self._axis_w = 48  # room for labels such as 7.500
 
     def _has_data(self, i: int) -> bool:
         return self.data[i][1] > 0
@@ -138,8 +146,8 @@ class StackedBarChart(_BarBase):
                 anchor = (QPointF(x + bw, pr.bottom() - h_total + 10), lab, ok, ng)
         if anchor:
             pt, lab, ok, ng = anchor
-            _draw_tooltip(p, pt, QRectF(0, 0, self.width(), self.height()), f"Pukul {lab}",
-                          f"{ok} kaleng", f"{ng} NG")
+            _draw_tooltip(p, pt, QRectF(0, 0, self.width(), self.height()), f"{self.title_prefix}{lab}",
+                          f"{_num(ok)} kaleng", f"{_num(ng)} NG")
 
 
 class PeakBarChart(_BarBase):
