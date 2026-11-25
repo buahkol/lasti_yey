@@ -4,17 +4,18 @@ from PyQt6.QtCore import QPointF, QRectF, Qt, pyqtSignal
 from PyQt6.QtGui import QColor, QLinearGradient, QPainter, QPen, QRadialGradient
 from PyQt6.QtWidgets import QFrame, QLabel, QSizePolicy, QWidget
 
-from .. import mock_data as data
+from ...controllers import AuthController
 from ..assets import logo_pixmap
 from ..components import Button, Checkbox, InputField, add_shadow, hbox, text, toast, vbox
 from ..theme import TONES, Color, Type
 
 
 class LoginPage(QWidget):
-    login_success = pyqtSignal(dict)
+    login_success = pyqtSignal(object)  # models.User
 
-    def __init__(self):
+    def __init__(self, controller: AuthController):
         super().__init__()
+        self._ctrl = controller
         self.setWindowTitle("SiMonPro, Masuk")
         self.setMinimumSize(900, 600)
         root = vbox(0, (56, 44, 56, 28), self)
@@ -92,14 +93,14 @@ class LoginPage(QWidget):
             self.username.edit.clear()
 
     def _submit(self) -> None:
-        user, pwd = self.username.value().strip(), self.password.value()
-        if user == data.DEMO_USER["username"] and pwd == data.DEMO_USER["password"]:
+        user, error = self._ctrl.login(self.username.value(), self.password.value())
+        if user is not None:
             self.username.set_error(None)
             self.password.set_error(None)
-            self.login_success.emit(dict(data.DEMO_USER))
+            self.login_success.emit(user)
             return
         self.username.set_error("")
-        self.password.set_error("Nama pengguna atau kata sandi salah. Silakan coba lagi.")
+        self.password.set_error(error)
         toast(self, "error", "Gagal masuk", "Periksa kembali nama pengguna dan kata sandi.")
 
     def paintEvent(self, _):  # noqa: N802

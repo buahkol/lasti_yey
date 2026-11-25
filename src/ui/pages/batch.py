@@ -1,43 +1,48 @@
 """Batch (FR-05, FR-06, FR-27): list with filters, date range, create and close batch."""
 
-import re
-
 from PyQt6.QtCore import QDate, Qt
 from PyQt6.QtWidgets import QFrame, QMenu, QSizePolicy, QWidget
 
-from .. import mock_data as data
+from ...controllers import BatchController
+from ...controllers.batch_controller import FILTERS
+from ...controllers.rules import NG_TOLERANCE_PERCENT
+from .. import formatting as fmt
 from ..components import (
     AdaptiveRow, Badge, Button, DataTable, DatePicker, IconButton, InputField, ModalCard, Overlay, ProgressBar, SearchField,
     SegmentedTabs, format_range, hbox, show_status, text, two_line, vbox,
 )
 from ..shell import Page
-from ..theme import NG_TOLERANCE_PERCENT, Color, Type
+from ..theme import Color, Type
 from .common import confirm_close_batch, open_export_pdf
 
-_FILTERS = [None, "BERJALAN", "PASSED", "HOLD"]
-_CODE = re.compile(r"^B-\d{4}-\d{2}$")
+_MENU_STYLE = (f"QMenu {{ background: #FFFFFF; border: 1px solid {Color.BORDER}; border-radius: 12px; padding: 6px; }}"
+               "QMenu::item { padding: 8px 14px; border-radius: 8px; }"
+               f"QMenu::item:selected {{ background: {Color.BRAND_SOFT}; color: {Color.TEXT_PRIMARY}; }}")
 
 
 class BatchPage(Page):
-    def __init__(self, window_getter):
+    def __init__(self, controller: BatchController, window_getter, open_report=None):
         super().__init__("Batch")
+        self._ctrl = controller
         self._win = window_getter
-        self.batches = [dict(b) for b in data.BATCHES]
-        self.filter = None
+        self._open_report = open_report
+        self.filter_key = None
+        self.sku = None
+        self.page_index = 0
         self.range = (QDate(2026, 11, 23), QDate(2026, 11, 25))
 
         self.search = SearchField("Cari kode batch", 260)
-        self.search.edit.textChanged.connect(lambda _: self._render())
+        self.search.edit.textChanged.connect(lambda _: self._reset_page())
         self.actions.addWidget(self.search)
         self.date_btn = Button(format_range(*self.range), "outline", "md", "calendar")
         self.date_btn.clicked.connect(self._pick_date)
         self.actions.addWidget(self.date_btn)
         create = Button("Buat batch", "primary", "md", "plus")
-        create.clicked.connect(self._create_dialog)
+        create.clicked.connect(lambda: self._create_dialog())
         self.actions.addWidget(create)
 
         bar = AdaptiveRow(spacing=12)
-        self.tabs = SegmentedTabs(self._tab_items())
+        self.tabs = SegmentedTabs([(label, "0") for label, _ in FILTERS])
         self.tabs.changed.connect(self._on_tab)
         bar.add(self.tabs, 0, align=Qt.AlignmentFlag.AlignLeft)
         bar.add_stretch()
@@ -59,84 +64,100 @@ class BatchPage(Page):
         footer = QFrame()
         footer.setObjectName("Foot")
         footer.setStyleSheet(f"QFrame#Foot {{ border: none; border-top: 1px solid {Color.BORDER}; }}")
-        f_lay = hbox(6, (20, 10, 16, 10), footer)
+        self._footer = hbox(6, (20, 10, 16, 10), footer)
         self.footer_label = text("", Type.CAPTION, Color.TEXT_TERTIARY)
-        f_lay.addWidget(self.footer_label, 1)
-        for label, on in (("1", True), ("2", False)):
-            b = Button(label, "navy" if on else "outline", "sm")
-            b.setFixedWidth(36)
-            b.setStyleSheet("QPushButton { padding: 0; border-radius: 10px; }")
-            f_lay.addWidget(b)
-        f_lay.addWidget(IconButton("chevron-right", "Halaman berikutnya", "outline", 36))
+        self._footer.addWidget(self.footer_label, 1)
+        self._pager = QWidget()
+        self._pager_lay = hbox(6, (0, 0, 0, 0), self._pager)
+        self._footer.addWidget(self._pager)
         self.table.add_footer(footer)
         self.body.addWidget(self.table, 1)
-        self.product = None
+        self._render()
+
+    def on_show(self) -> None:
         self._render()
 
     # data ----------------------------------------------------------------
-    def _tab_items(self) -> list:
-        count = lambda st: sum(1 for b in self.batches if st in (b["batch"], b["inspection"]))  # noqa: E731
-        return [("Semua", str(data.BATCH_TOTAL)), ("Berjalan", str(count("BERJALAN"))),
-                ("PASSED", str(count("PASSED") + 4)), ("HOLD", str(count("HOLD") - 1))]
-
-    def _visible(self) -> list:
-        q = self.search.edit.text().strip().upper()
-        rows = []
-        for b in self.batches:
-            if self.filter and self.filter not in (b["batch"], b["inspection"]):
-                continue
-            if self.product and b["product"] != self.product:
-                continue
-            if q and q not in b["code"]:
-                continue
-            rows.append(b)
-        return rows
+    def _filters(self) -> dict:
+        return {"sku": self.sku, "query": self.search.edit.text(),
+                "start": self.range[0].toPyDate(), "end": self.range[1].toPyDate()}
 
     def _render(self) -> None:
+        filters = self._filters()
+        self.tabs.set_counts(self._ctrl.tab_counts(**filters))
+        rows = self._ctrl.search(self.filter_key, **filters)
+        pages = self._ctrl.page_count(rows)
+        self.page_index = min(self.page_index, pages - 1)
+        shown = self._ctrl.page(rows, self.page_index)
         self.table.clear_rows()
-        rows = self._visible()
-        for b in rows:
-            frac = b["ng_percent"] / NG_TOLERANCE_PERCENT
+        for b in shown:
+            frac = b.ng_percent / NG_TOLERANCE_PERCENT
             tone = "pink" if frac > 1 else ("blue" if frac > 0.8 else "indigo")
-            bar = ProgressBar("NG", data.pct(b["ng_percent"]), frac, tone, marker=1.0 if frac > 1 else None)
-            if b["batch"] == "BERJALAN":
+            bar = ProgressBar("NG", fmt.pct(b.ng_percent), frac, tone, marker=1.0 if frac > 1 else None)
+            if b.running:
                 action = Button("Tutup batch", "outline", "sm", "lock")
-                action.clicked.connect(lambda _=False, code=b["code"]: self._close(code))
+                action.clicked.connect(lambda _=False, code=b.code: self._close(code))
             else:
                 action = QWidget()
                 a = hbox(2, (0, 0, 0, 0), action)
-                a.addWidget(IconButton("report", "Lihat laporan", "ghost", 34, Color.ICON))
+                report = IconButton("report", "Lihat laporan", "ghost", 34, Color.ICON)
+                report.clicked.connect(lambda _=False, code=b.code: self._show_report(code))
+                a.addWidget(report)
                 dl = IconButton("download", "Ekspor PDF", "ghost", 34, Color.ICON)
-                dl.clicked.connect(lambda _=False, code=b["code"], p=b["product"]: open_export_pdf(self._win(), code, p))
+                dl.clicked.connect(lambda _=False, code=b.code, p=b.product: open_export_pdf(self._win(), code, p))
                 a.addWidget(dl)
                 a.addWidget(IconButton("more", "Lainnya", "ghost", 34, Color.ICON))
-            self.table.add_row([two_line(b["code"], b["sku"]), text(b["product"], Type.BODY),
-                                two_line(b["start"], b["duration"], strong=False),
-                                text(data.num(b["output"]), Type.BODY_STRONG), bar,
-                                Badge(b["batch"]), Badge(b["inspection"]), action])
+            self.table.add_row([two_line(b.code, b.sku), text(b.product, Type.BODY),
+                                two_line(b.start_label, b.duration, strong=False),
+                                text(fmt.num(b.output), Type.BODY_STRONG), bar,
+                                Badge(b.status), Badge(b.inspection), action])
+        total = len(self._ctrl.search(None, **filters))
         self.footer_label.setText(
-            f"Menampilkan {len(rows)} dari {data.BATCH_TOTAL} batch pada {format_range(*self.range)}."
+            f"Menampilkan {len(shown)} dari {total} batch pada {format_range(*self.range)}."
             f" Batas toleransi NG {NG_TOLERANCE_PERCENT:g}%.")
+        self._render_pager(pages)
+
+    def _render_pager(self, pages: int) -> None:
+        while self._pager_lay.count():
+            w = self._pager_lay.takeAt(0).widget()
+            if w:
+                w.deleteLater()
+        for i in range(pages):
+            b = Button(str(i + 1), "navy" if i == self.page_index else "outline", "sm")
+            b.setFixedWidth(36)
+            b.setStyleSheet("QPushButton { padding: 0; border-radius: 10px; }")
+            b.clicked.connect(lambda _=False, k=i: self._go_page(k))
+            self._pager_lay.addWidget(b)
+        nxt = IconButton("chevron-right", "Halaman berikutnya", "outline", 36)
+        nxt.setEnabled(self.page_index < pages - 1)
+        nxt.clicked.connect(lambda: self._go_page(self.page_index + 1))
+        self._pager_lay.addWidget(nxt)
 
     # actions ---------------------------------------------------------------
-    def _on_tab(self, index: int) -> None:
-        self.filter = _FILTERS[index]
+    def _go_page(self, index: int) -> None:
+        self.page_index = index
         self._render()
+
+    def _reset_page(self) -> None:
+        self.page_index = 0
+        self._render()
+
+    def _on_tab(self, index: int) -> None:
+        self.filter_key = FILTERS[index][1]
+        self._reset_page()
 
     def _product_menu(self) -> None:
         menu = QMenu(self)
-        menu.setStyleSheet(f"QMenu {{ background: #FFFFFF; border: 1px solid {Color.BORDER}; border-radius: 12px; padding: 6px; }}"
-                           f"QMenu::item {{ padding: 8px 14px; border-radius: 8px; }}"
-                           f"QMenu::item:selected {{ background: {Color.BRAND_SOFT}; color: {Color.TEXT_PRIMARY}; }}")
-        for name in [None] + [p["name"] for p in data.PRODUCTS]:
-            act = menu.addAction(name or "Semua produk")
-            act.triggered.connect(lambda _=False, n=name: self._set_product(n))
+        menu.setStyleSheet(_MENU_STYLE)
+        for p in [None] + self._ctrl.products():
+            act = menu.addAction(p.name if p else "Semua produk")
+            act.triggered.connect(lambda _=False, pp=p: self._set_product(pp))
         menu.exec(self.product_btn.mapToGlobal(self.product_btn.rect().bottomLeft()))
 
-    def _set_product(self, name) -> None:
-        self.product = name
-        self.product_btn.setText(f" {name or 'Semua produk'}")
-        self._render()
+    def _set_product(self, product) -> None:
+        self.sku = product.sku if product else None
+        self.product_btn.setText(f" {product.name if product else 'Semua produk'}")
+        self._reset_page()
 
     def _pick_date(self) -> None:
         picker = DatePicker(*self.range, QDate(2026, 11, 25), self)
@@ -146,14 +167,15 @@ class BatchPage(Page):
     def _set_range(self, start: QDate, end: QDate) -> None:
         self.range = (start, end)
         self.date_btn.setText(f" {format_range(start, end)}")
-        self._render()
+        self._reset_page()
+
+    def _show_report(self, code: str) -> None:
+        if self._open_report:
+            self._open_report(code)
 
     def _close(self, code: str) -> None:
         def closed():
-            for b in self.batches:
-                if b["code"] == code:
-                    b["batch"] = "DITUTUP"
-                    b["inspection"] = "HOLD" if b["ng_percent"] > NG_TOLERANCE_PERCENT else "PASSED"
+            self._ctrl.close(code)
             self._render()
         confirm_close_batch(self._win(), code, closed)
 
@@ -165,17 +187,16 @@ class BatchPage(Page):
         f_code = InputField("Kode batch", "Contoh: B-2411-04", code, "layers",
                             helper="Format B-TTBB-NN dan harus unik.")
         card.body.addWidget(f_code)
-        products = list(data.PRODUCTS)
+        products = self._ctrl.products()
         chosen = {"p": products[0]}
-        f_prod = InputField("Produk", "", f"{products[0]['name']} ({products[0]['sku']})", "package", trailing="dropdown")
+        f_prod = InputField("Produk", "", products[0].label, "package", trailing="dropdown")
         f_prod.edit.setReadOnly(True)
 
         def pick_product():
             menu = QMenu(f_prod)
             for p in products:
-                act = menu.addAction(f"{p['name']} ({p['sku']})")
-                act.triggered.connect(lambda _=False, pp=p: (chosen.update(p=pp),
-                                                             f_prod.edit.setText(f"{pp['name']} ({pp['sku']})")))
+                act = menu.addAction(p.label)
+                act.triggered.connect(lambda _=False, pp=p: (chosen.update(p=pp), f_prod.edit.setText(pp.label)))
             menu.exec(f_prod.field.mapToGlobal(f_prod.field.rect().bottomLeft()))
 
         f_prod.trailing_clicked.connect(pick_product)
@@ -205,23 +226,21 @@ class BatchPage(Page):
         cancel.clicked.connect(holder["o"].close_overlay)
 
         def submit():
-            value = f_code.value().strip().upper()
-            if not _CODE.match(value):
+            p = chosen["p"]
+            result = self._ctrl.create(f_code.value(), p)
+            if result.error == "format":
                 f_code.set_error("Format kode batch belum sesuai, contoh B-2411-04.")
                 return
             holder["o"].close_overlay()
-            if any(b["code"] == value for b in self.batches):
+            value = f_code.value().strip().upper()
+            if result.error == "duplicate":
                 show_status(self._win(), "failed", "Kode batch sudah digunakan",
                             f"Kode {value} sudah terdaftar. Gunakan kode batch lain, lalu simpan kembali.",
                             [("Batal", "outline", None), ("Ganti kode", "primary", lambda: self._create_dialog(value))])
                 return
-            p = chosen["p"]
-            self.batches.insert(0, {"code": value, "sku": p["sku"], "product": p["name"], "start": "25 Nov, baru saja",
-                                    "duration": "berjalan 0 menit", "output": 0, "ng_percent": 0.0,
-                                    "batch": "BERJALAN", "inspection": "HOLD"})
-            self._render()
+            self._reset_page()
             show_status(self._win(), "success", "Batch berhasil dibuat",
-                        f"Batch {value} untuk produk {p['name']} siap menerima data dari ESP32-CAM.",
+                        f"Batch {value} untuk produk {p.name} siap menerima data dari ESP32-CAM.",
                         [("Lihat batch", "primary", None)])
 
         save.clicked.connect(submit)

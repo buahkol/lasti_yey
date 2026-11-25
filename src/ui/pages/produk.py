@@ -3,7 +3,9 @@
 from PyQt6.QtCore import QDate, Qt
 from PyQt6.QtWidgets import QFrame, QLabel, QSizePolicy, QWidget
 
-from .. import mock_data as data
+from ...controllers import ProductController
+from ...models import Product
+from .. import formatting as fmt
 from ..assets import pixmap
 from ..components import (
     AdaptiveRow, Badge, Button, Card, DataTable, DatePicker, IconButton, InputField, PanelHeader, ProgressBar,
@@ -14,7 +16,7 @@ from ..theme import TONES, Color, Type
 
 
 class AvailabilityCard(Card):
-    def __init__(self, product: dict, highlight: bool = False):
+    def __init__(self, product: Product, highlight: bool = False):
         super().__init__((18, 18, 18, 18), 10)
         if highlight:
             self.setStyleSheet(
@@ -31,24 +33,25 @@ class AvailabilityCard(Card):
         chip.setStyleSheet(f"background: {t.soft}; border: 1px solid {t.mid}; border-radius: 12px;")
         top.addWidget(chip)
         col = vbox(0)
-        col.addWidget(text(product["name"], Type.BODY_STRONG))
-        col.addWidget(text(product["sku"], Type.CAPTION, Color.TEXT_TERTIARY))
+        col.addWidget(text(product.name, Type.BODY_STRONG))
+        col.addWidget(text(product.sku, Type.CAPTION, Color.TEXT_TERTIARY))
         top.addLayout(col, 1)
         self.layout_.addLayout(top)
         row = hbox(6)
-        row.addWidget(text(data.num(product["ok_today"]), Type.DISPLAY), 0, Qt.AlignmentFlag.AlignBottom)
+        row.addWidget(text(fmt.num(product.ok_today), Type.DISPLAY), 0, Qt.AlignmentFlag.AlignBottom)
         row.addWidget(text("kaleng OK", Type.LABEL, Color.TEXT_TERTIARY), 0, Qt.AlignmentFlag.AlignBottom)
         row.addStretch(1)
         self.layout_.addLayout(row)
-        self.add(ProgressBar("Rasio OK", data.pct(product["ok_ratio"]), product["ok_ratio"] / 100, "indigo",
-                             caption=f"Diperbarui {product['updated']}"))
+        self.add(ProgressBar("Rasio OK", fmt.pct(product.ok_ratio), product.ok_ratio / 100, "indigo",
+                             caption=f"Diperbarui {product.updated}"))
 
 
 class ProdukPage(Page):
-    def __init__(self, window_getter):
+    def __init__(self, controller: ProductController, window_getter):
         super().__init__("Produk")
+        self._ctrl = controller
         self._win = window_getter
-        self.products = [dict(p) for p in data.PRODUCTS]
+        self.products = self._ctrl.products()
         self.current = 0
         self.date_btn = Button("Hari ini, 25 Nov 2026", "outline", "md", "calendar")
         self.date_btn.clicked.connect(self._pick_date)
@@ -85,10 +88,10 @@ class ProdukPage(Page):
             edit.clicked.connect(lambda _=False, k=i: self._load(k))
             a_lay.addWidget(edit)
             a_lay.addWidget(IconButton("more", "Lainnya", "ghost", 34, Color.ICON))
-            self.table.add_row([text(p["sku"], Type.BODY_STRONG), text(p["name"], Type.BODY),
-                                text(data.rupiah(p["price"]), Type.BODY_STRONG),
-                                text(f"{p['threshold']:.2f}".replace(".", ","), Type.BODY_STRONG),
-                                Badge(p["status"]), actions], selected=i == self.current)
+            self.table.add_row([text(p.sku, Type.BODY_STRONG), text(p.name, Type.BODY),
+                                text(fmt.rupiah(p.price), Type.BODY_STRONG),
+                                text(fmt.score(p.threshold), Type.BODY_STRONG),
+                                Badge(p.status), actions], selected=i == self.current)
 
     def _form(self) -> Card:
         card = Card((22, 22, 22, 22), 18)
@@ -136,11 +139,11 @@ class ProdukPage(Page):
         p = self.products[index]
         self.table.select(index)
         self.form_title.setText("Ubah produk")
-        self.form_caption.setText(f"{p['sku']}, dipakai oleh {p['batches']} batch")
-        self.f_sku.edit.setText(p["sku"])
+        self.form_caption.setText(f"{p.sku}, dipakai oleh {p.batch_count} batch")
+        self.f_sku.edit.setText(p.sku)
         self.f_sku.setEnabled(False)
-        self.f_name.edit.setText(p["name"])
-        self.f_price.edit.setText(data.num(p["price"]))
+        self.f_name.edit.setText(p.name)
+        self.f_price.edit.setText(fmt.num(p.price))
         for f in (self.f_name, self.f_price):
             f.set_error(None)
 
@@ -155,30 +158,20 @@ class ProdukPage(Page):
         self.f_sku.edit.setFocus()
 
     def _save(self) -> None:
-        name, price = self.f_name.value().strip(), self.f_price.value().replace(".", "").strip()
-        ok = True
-        if not name:
-            self.f_name.set_error("Nama produk wajib diisi.")
-            ok = False
-        if not price.isdigit():
-            self.f_price.set_error("Harga satuan harus berupa angka.")
-            ok = False
-        if not ok:
+        is_new = self.current == -1
+        for f in (self.f_sku, self.f_name, self.f_price):
+            f.set_error(None)
+        product, errors = self._ctrl.save(self.f_sku.value(), self.f_name.value(), self.f_price.value(), is_new)
+        fields = {"sku": self.f_sku, "name": self.f_name, "price": self.f_price}
+        for key, message in errors.items():
+            fields[key].set_error(message)
+        if product is None:
             return
-        if self.current == -1:
-            sku = self.f_sku.value().strip().upper()
-            if not sku or any(p["sku"] == sku for p in self.products):
-                self.f_sku.set_error("SKU kosong atau sudah terdaftar.")
-                return
-            self.products.append({"sku": sku, "name": name, "price": int(price), "threshold": 0.60,
-                                  "model": "belum ada", "status": "DITUTUP", "ok_today": 0, "ok_ratio": 0.0,
-                                  "updated": "baru saja", "batches": 0})
-            self.current = len(self.products) - 1
-        else:
-            self.products[self.current].update({"name": name, "price": int(price)})
+        self.products = self._ctrl.products()
+        self.current = self.products.index(product)
         self._fill_table()
         self._load(self.current)
-        toast(self._win(), "success", "Produk tersimpan", f"Perubahan {self.products[self.current]['sku']} berhasil disimpan.")
+        toast(self._win(), "success", "Produk tersimpan", f"Perubahan {product.sku} berhasil disimpan.")
 
     def _pick_date(self) -> None:
         picker = DatePicker(QDate(2026, 11, 25), QDate(2026, 11, 25), QDate(2026, 11, 25), self)

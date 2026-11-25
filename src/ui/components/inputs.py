@@ -274,3 +274,10 @@ class SegmentedTabs(QFrame):
             lay.addWidget(b)
         self._group.button(current).setChecked(True)
         self._group.idClicked.connect(self.changed)
+
+    def set_counts(self, counts: list) -> None:
+        """Update the number chips, for example after a filter changes."""
+        for i, count in enumerate(counts):
+            button = self._group.button(i)
+            if button is not None and button._count is not None:
+                button._count.setText(str(count))

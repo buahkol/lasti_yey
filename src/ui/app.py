@@ -7,6 +7,8 @@ import sys
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QApplication
 
+from ..controllers import Controllers
+from ..models import User
 from .components import toast
 from .pages.alert import AlertPage
 from .pages.batch import BatchPage
@@ -20,30 +22,35 @@ from .theme.scale import choose_scale
 
 
 class SiMonProApp:
+    """Wires the MVC layers: services and controllers are created once and shared by every page."""
+
     def __init__(self):
-        self.login = LoginPage()
+        self.controllers = Controllers.create()
+        self.login = LoginPage(self.controllers.auth)
         self.login.login_success.connect(self._open_main)
         self.window: AppWindow | None = None
 
     def start(self) -> None:
         self.login.showMaximized()
 
-    def _open_main(self, user: dict) -> None:
+    def _open_main(self, user: User) -> None:
+        c = self.controllers
         win = AppWindow()
         getter = lambda: win  # noqa: E731
-        win.add_page("dashboard", DashboardPage(win.go, getter))
-        win.add_page("produk", ProdukPage(getter))
-        win.add_page("batch", BatchPage(getter))
-        win.add_page("alert", AlertPage(getter))
+        win.add_page("dashboard", DashboardPage(c.dashboard, c.batches, user, win.go, getter))
+        win.add_page("produk", ProdukPage(c.products, getter))
+        win.add_page("batch", BatchPage(c.batches, getter, lambda code: win.go("laporan")))
+        win.add_page("alert", AlertPage(c.alerts, getter))
         win.add_page("laporan", LaporanPage(getter))
         win.logout_requested.connect(self._logout)
         win.go("dashboard")
         win.showMaximized()
         self.window = win
         self.login.hide()
-        toast(win, "success", "Berhasil masuk", f"Selamat bekerja, {user['name']}.")
+        toast(win, "success", "Berhasil masuk", f"Selamat bekerja, {user.name}.")
 
     def _logout(self) -> None:
+        self.controllers.auth.logout()
         if self.window:
             self.window.close()
             self.window.deleteLater()

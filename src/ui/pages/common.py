@@ -8,12 +8,14 @@ from ..components import (
     Badge, Button, CanPhoto, Checkbox, IconButton, InputField, ModalCard, Overlay, ProgressBar, RadioOption,
     add_shadow, hbox, show_status, text, toast, vbox,
 )
+from ...models import Alert
 from ..theme import TONES, Color, Type, font
 
 
-def open_photo_viewer(window: QWidget, alert: tuple, product: str = "Sarden saus tomat 155 g") -> Overlay:
+def open_photo_viewer(window: QWidget, alert: Alert) -> Overlay:
     """Full photo of one NG can with score details (FR-23)."""
-    batch, time, score, threshold, defect = alert
+    batch, time, score, threshold, defect = alert.batch, alert.time, alert.score, alert.threshold, alert.defect
+    product = alert.product
     card = QFrame()
     card.setObjectName("Viewer")
     card.setStyleSheet("QFrame#Viewer { background: #FFFFFF; border-radius: 24px; }")

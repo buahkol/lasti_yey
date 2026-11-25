@@ -4,7 +4,10 @@ from PyQt6.QtCore import QPointF, QRectF, Qt, QTimer
 from PyQt6.QtGui import QColor, QLinearGradient, QPainter, QPainterPath, QPen, QRadialGradient
 from PyQt6.QtWidgets import QFrame, QLabel, QSizePolicy, QWidget
 
-from .. import mock_data as data
+from ...controllers import DashboardController
+from ...controllers import BatchController
+from ...models import Batch, User
+from .. import formatting as fmt
 from ..assets import icon
 from ..charts import StackedBarChart
 from ..components import (
@@ -19,12 +22,12 @@ from .common import confirm_close_batch, open_photo_viewer
 class BatchHero(QFrame):
     """Navy card for the batch that is currently running."""
 
-    def __init__(self, on_report, on_close):
+    def __init__(self, batch: Batch, started: str, on_report, on_close):
         super().__init__()
         self.setMinimumWidth(460)
         self.setMinimumHeight(250)
         self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
-        b = data.ACTIVE_BATCH
+        b = batch
         lay = vbox(0, (28, 24, 28, 24), self)
         top = hbox(8)
         pill = QLabel("BERJALAN")
@@ -32,15 +35,15 @@ class BatchHero(QFrame):
         pill.setStyleSheet(f"background: {Color.AQUA}; color: {Color.TEXT_PRIMARY}; border-radius: 8px; padding: 4px 10px;")
         top.addWidget(pill)
         top.addStretch(1)
-        top.addWidget(text(f"Dimulai pukul {b['started']}", Type.CAPTION, "rgba(255,255,255,0.75)"))
+        top.addWidget(text(f"Dimulai pukul {started}", Type.CAPTION, "rgba(255,255,255,0.75)"))
         lay.addLayout(top)
         lay.addSpacing(16)
         lay.addWidget(text("Batch aktif", Type.LABEL, "rgba(255,255,255,0.72)"))
-        lay.addWidget(text(b["code"], Type.DISPLAY_XL, "#FFFFFF"))
-        lay.addWidget(text(f"{b['product']} ({b['sku']})", Type.BODY, "rgba(255,255,255,0.82)"))
+        lay.addWidget(text(b.code, Type.DISPLAY_XL, "#FFFFFF"))
+        lay.addWidget(text(f"{b.product} ({b.sku})", Type.BODY, "rgba(255,255,255,0.82)"))
         lay.addStretch(1)
-        frac = b["ng_percent"] / NG_TOLERANCE_PERCENT
-        lay.addWidget(ProgressBar("Persentase NG", data.pct(b["ng_percent"]), frac, "indigo",
+        frac = b.ng_percent / NG_TOLERANCE_PERCENT
+        lay.addWidget(ProgressBar("Persentase NG", fmt.pct(b.ng_percent), frac, "indigo",
                                   suffix=f"dari batas {NG_TOLERANCE_PERCENT:g}%", marker=1.0, on_dark=True,
                                   fill_colors=["#A8E9EC", "#C7C9F6", "#F4B3CD"]))
         lay.addSpacing(18)
@@ -88,27 +91,32 @@ class BatchHero(QFrame):
 
 
 class DashboardPage(Page):
-    def __init__(self, navigate, window_getter):
-        super().__init__("Selamat pagi, Operasional")
+    def __init__(self, controller: DashboardController, batches: BatchController, user: User, navigate,
+                 window_getter):
+        super().__init__(f"Selamat pagi, {user.name}")
+        self._ctrl = controller
+        self._batches = batches
         self._win = window_getter
         self.actions.addWidget(SearchField("Cari kode batch", 300))
         self.live = LiveIndicator()
         self.actions.addWidget(self.live)
-        u = data.DEMO_USER
-        self.actions.addWidget(UserChip(u["name"], u["role"], u["initials"]))
+        self.actions.addWidget(UserChip(user.name, user.role, user.initials))
 
-        s = data.DASHBOARD_STATS
+        s = self._ctrl.stats()
+        active = self._ctrl.active_batch()
         row1 = AdaptiveRow(breakpoint=1280)
-        hero = BatchHero(lambda: navigate("laporan"),
-                         lambda: confirm_close_batch(self._win(), data.ACTIVE_BATCH["code"]))
-        row1.add(hero, 5)
+        if active is not None:
+            hero = BatchHero(active, self._ctrl.active_batch_started(), lambda: navigate("laporan"),
+                             lambda: confirm_close_batch(self._win(), active.code,
+                                                         lambda: self._batches.close(active.code)))
+            row1.add(hero, 5)
         grid = ResponsiveGrid(220, 4, 16, steps=(4, 2, 1))
-        grid.add(StatCard("blue", "package", "Total output hari ini", data.num(s["output"]), "kaleng",
+        grid.add(StatCard("blue", "package", "Total output hari ini", fmt.num(s["output"]), "kaleng",
                           s["output_delta"], f"sejak pukul {s['output_since']}", "trend-up"))
-        grid.add(StatCard("indigo", "check-circle", "Kaleng OK", data.num(s["ok"]), "kaleng",
-                          data.pct(s["ok_percent"]), "dari total inspeksi"))
-        grid.add(StatCard("pink", "warning", "Kaleng NG", data.num(s["ng"]), "kaleng",
-                          data.pct(s["ng_percent"]), f"batas toleransi {NG_TOLERANCE_PERCENT:g}%",
+        grid.add(StatCard("indigo", "check-circle", "Kaleng OK", fmt.num(s["ok"]), "kaleng",
+                          fmt.pct(s["ok_percent"]), "dari total inspeksi"))
+        grid.add(StatCard("pink", "warning", "Kaleng NG", fmt.num(s["ng"]), "kaleng",
+                          fmt.pct(s["ng_percent"]), f"batas toleransi {NG_TOLERANCE_PERCENT:g}%",
                           highlight_value=True))
         grid.add(StatCard("amber", "activity", "Kejadian produksi", str(s["events"]), "kejadian",
                           f"{s['events_reject']} REJECT", "dicatat otomatis"))
@@ -122,13 +130,14 @@ class DashboardPage(Page):
         head = hbox(16)
         col = vbox(2)
         col.addWidget(text("Output per jam", Type.TITLE))
-        col.addWidget(text(f"Batch {data.ACTIVE_BATCH['code']}, kaleng OK dan NG setiap jam", Type.CAPTION,
+        col.addWidget(text(f"Batch {active.code if active else '-'}, kaleng OK dan NG setiap jam", Type.CAPTION,
                            Color.TEXT_TERTIARY))
         head.addLayout(col, 1)
         for label, color in (("OK", Color.CHART_OK), ("NG", Color.CHART_NG)):
             head.addWidget(_legend(label, color))
         chart_card.layout_.addLayout(head)
-        chart_card.add(StackedBarChart(data.OUTPUT_PER_HOUR, data.CURRENT_HOUR_INDEX), 1)
+        hours, current = self._ctrl.output_per_hour()
+        chart_card.add(StackedBarChart(hours, current), 1)
         left.addWidget(chart_card, 1)
         left.addWidget(self._today_batches(navigate))
         row2.add(left_w, 1)
@@ -151,30 +160,30 @@ class DashboardPage(Page):
         ph.layout().setContentsMargins(20, 0, 12, 6)
         ph.action_clicked.connect(lambda: navigate("batch"))
         card.add(ph)
-        for b in data.TODAY_BATCHES:
+        for b, badge in self._ctrl.today_batches():
             row = QFrame()
             row.setObjectName("Row")
             row.setStyleSheet(f"QFrame#Row {{ border: none; border-top: 1px solid {Color.BORDER}; }}")
             lay = hbox(20, (20, 10, 20, 10), row)
             c1 = vbox(0)
-            c1.addWidget(text(b["code"], Type.BODY_STRONG))
-            c1.addWidget(text(b["product"], Type.CAPTION, Color.TEXT_TERTIARY))
+            c1.addWidget(text(b.code, Type.BODY_STRONG))
+            c1.addWidget(text(b.product, Type.CAPTION, Color.TEXT_TERTIARY))
             w1 = QWidget()
             w1.setLayout(c1)
             w1.setFixedWidth(170)
             lay.addWidget(w1)
             c2 = vbox(0)
-            c2.addWidget(text(data.num(b["output"]), Type.BODY_STRONG, align=Qt.AlignmentFlag.AlignRight))
+            c2.addWidget(text(fmt.num(b.output), Type.BODY_STRONG, align=Qt.AlignmentFlag.AlignRight))
             c2.addWidget(text("output", Type.CAPTION, Color.TEXT_TERTIARY, align=Qt.AlignmentFlag.AlignRight))
             lay.addLayout(c2)
-            frac = b["ng_percent"] / NG_TOLERANCE_PERCENT
+            frac = b.ng_percent / NG_TOLERANCE_PERCENT
             tone = "pink" if frac > 1 else "indigo"
-            lay.addWidget(ProgressBar("NG", data.pct(b["ng_percent"]), frac, tone,
+            lay.addWidget(ProgressBar("NG", fmt.pct(b.ng_percent), frac, tone,
                                       suffix=f"batas {NG_TOLERANCE_PERCENT:g}%",
                                       marker=1.0 if frac > 1 else None), 1)
             badge_box = hbox(0)
             badge_box.addStretch(1)
-            badge_box.addWidget(Badge(b["status"]))
+            badge_box.addWidget(Badge(badge))
             w = QWidget()
             w.setLayout(badge_box)
             w.setFixedWidth(100)
@@ -184,7 +193,8 @@ class DashboardPage(Page):
 
     def _alerts(self, navigate) -> Card:
         card = Card((10, 16, 10, 12), 4)
-        ph = PanelHeader("Alert kemasan cacat", f"{data.ALERT_SUMMARY['ng_30min']} kaleng NG dalam 30 menit terakhir",
+        a = self._ctrl.alert_summary()
+        ph = PanelHeader("Alert kemasan cacat", f"{a['ng_30min']} kaleng NG dalam 30 menit terakhir",
                          "Lihat semua")
         ph.layout().setContentsMargins(10, 0, 0, 6)
         ph.action_clicked.connect(lambda: navigate("alert"))
@@ -198,14 +208,12 @@ class DashboardPage(Page):
         tl = hbox(10, (14, 10, 14, 10), top)
         col = vbox(0)
         col.addWidget(text("Skor anomali tertinggi", Type.CAPTION, Color.TEXT_SECONDARY))
-        a = data.ALERT_SUMMARY
         col.addWidget(text(f"{a['top_batch']}, pukul {a['top_time']}", Type.BODY_STRONG))
         tl.addLayout(col, 1)
-        tl.addWidget(text(f"{a['top_score']:.2f}".replace(".", ","), Type.TITLE, TONES["pink"].ink))
+        tl.addWidget(text(fmt.score(a["top_score"]), Type.TITLE, TONES["pink"].ink))
         card.add(top)
-        for i, al in enumerate(data.ALERTS[:6]):
-            batch, time, score, thr, defect = al
-            row = AlertRow(batch, f"Pukul {time}", f"{score:.2f}".replace(".", ","), defect, highlight=i == 0)
+        for i, al in enumerate(self._ctrl.alerts(6)):
+            row = AlertRow(al.batch, f"Pukul {al.time}", fmt.score(al.score), al.defect, highlight=i == 0)
             row.clicked.connect(lambda a=al: open_photo_viewer(self._win(), a))
             card.add(row)
         card.layout_.addStretch(1)
