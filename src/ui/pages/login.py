@@ -16,7 +16,7 @@ class LoginPage(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("SiMonPro, Masuk")
-        self.setMinimumSize(1100, 720)
+        self.setMinimumSize(900, 600)
         root = vbox(0, (56, 44, 56, 28), self)
 
         brand = hbox(12)
