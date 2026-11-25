@@ -126,7 +126,7 @@ def confirm_close_batch(window: QWidget, code: str, on_closed=None) -> None:
 
 
 def open_export_pdf(window: QWidget, batch_code: str = "B-2411-02", product: str = "Sarden saus cabai 155 g",
-                    date_label: str = "25Nov2026") -> Overlay:
+                    date_label: str = "25Nov2026", per_date: bool = False) -> Overlay:
     """Export dialog for the batch inspection report or the production recap (FR-21, FR-25)."""
 
     card = ModalCard(560)
@@ -181,6 +181,8 @@ def open_export_pdf(window: QWidget, batch_code: str = "B-2411-02", product: str
     card.body.addLayout(row)
     holder["o"] = Overlay(window, card).open()
     cancel.clicked.connect(holder["o"].close_overlay)
+    if per_date:
+        r2.setChecked(True)
 
     def do_export():
         name = file_name.text()

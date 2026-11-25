@@ -281,3 +281,9 @@ class SegmentedTabs(QFrame):
             button = self._group.button(i)
             if button is not None and button._count is not None:
                 button._count.setText(str(count))
+
+    def set_current(self, index: int) -> None:
+        """Select a tab from code without emitting changed."""
+        button = self._group.button(index)
+        if button is not None:
+            button.setChecked(True)

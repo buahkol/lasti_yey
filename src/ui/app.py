@@ -39,9 +39,10 @@ class SiMonProApp:
         getter = lambda: win  # noqa: E731
         win.add_page("dashboard", DashboardPage(c.dashboard, c.batches, user, win.go, getter))
         win.add_page("produk", ProdukPage(c.products, getter))
-        win.add_page("batch", BatchPage(c.batches, getter, lambda code: win.go("laporan")))
+        laporan = LaporanPage(c.reports, getter)
+        win.add_page("batch", BatchPage(c.batches, getter, lambda code: (win.go("laporan"), laporan.show_batch(code))))
         win.add_page("alert", AlertPage(c.alerts, getter))
-        win.add_page("laporan", LaporanPage(getter))
+        win.add_page("laporan", laporan)
         win.logout_requested.connect(self._logout)
         win.go("dashboard")
         win.showMaximized()
