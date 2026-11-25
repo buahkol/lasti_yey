@@ -6,7 +6,8 @@ import threading
 from collections.abc import Iterator
 from dataclasses import dataclass
 
-from fastapi import Depends, Header, HTTPException, Request, status
+from fastapi import Depends, HTTPException, Request, Security, status
+from fastapi.security import APIKeyHeader, HTTPAuthorizationCredentials, HTTPBearer
 from psycopg2.extensions import connection as PgConnection
 
 from .config import Settings
@@ -35,6 +36,16 @@ def get_conn(db: Database = Depends(get_database)) -> Iterator[PgConnection]:
 
 def get_inspector(request: Request) -> BaseInspector:
     return request.app.state.inspector
+
+
+# Declared as OpenAPI security schemes so Swagger UI (/docs) shows an "Authorize" button. A plain
+# ``Header()`` parameter named Authorization is ignored by Swagger UI and never sent (OpenAPI spec).
+bearer_scheme = HTTPBearer(auto_error=False, description="Token dari POST /auth/login (tanpa kata 'Bearer')")
+device_key_scheme = APIKeyHeader(name="X-Device-Key", auto_error=False, description="API key perangkat ESP32")
+
+
+def _bearer_header(creds: HTTPAuthorizationCredentials | None) -> str | None:
+    return f"Bearer {creds.credentials}" if creds and creds.credentials else None
 
 
 @dataclass
@@ -83,7 +94,7 @@ def _user_from_bearer(authorization: str | None, conn: PgConnection) -> Principa
 
 
 def require_device(
-    x_device_key: str | None = Header(default=None),
+    x_device_key: str | None = Security(device_key_scheme),
     conn: PgConnection = Depends(get_conn),
 ) -> Principal:
     p = _device_from_key(x_device_key, conn)
@@ -93,21 +104,21 @@ def require_device(
 
 
 def require_user(
-    authorization: str | None = Header(default=None),
+    creds: HTTPAuthorizationCredentials | None = Security(bearer_scheme),
     conn: PgConnection = Depends(get_conn),
 ) -> Principal:
-    p = _user_from_bearer(authorization, conn)
+    p = _user_from_bearer(_bearer_header(creds), conn)
     if p is None:
         raise _unauthorized("Sesi tidak valid atau sudah berakhir, silakan login ulang")
     return p
 
 
 def require_user_or_device(
-    authorization: str | None = Header(default=None),
-    x_device_key: str | None = Header(default=None),
+    creds: HTTPAuthorizationCredentials | None = Security(bearer_scheme),
+    x_device_key: str | None = Security(device_key_scheme),
     conn: PgConnection = Depends(get_conn),
 ) -> Principal:
-    p = _user_from_bearer(authorization, conn) or _device_from_key(x_device_key, conn)
+    p = _user_from_bearer(_bearer_header(creds), conn) or _device_from_key(x_device_key, conn)
     if p is None:
         raise _unauthorized("Token pengguna atau API key perangkat diperlukan")
     return p

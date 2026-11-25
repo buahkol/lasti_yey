@@ -4,11 +4,12 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Response, Security, status
+from fastapi.security import HTTPAuthorizationCredentials
 from psycopg2.extensions import connection as PgConnection
 
 from ..config import Settings
-from ..deps import Principal, get_conn, get_settings_dep, require_user
+from ..deps import Principal, bearer_scheme, get_conn, get_settings_dep, require_user
 from ..schemas import LoginRequest, LoginResponse, UserOut
 from ..security import new_token, sha256_hex, verify_secret
 
@@ -33,9 +34,9 @@ def login(body: LoginRequest, conn: PgConnection = Depends(get_conn),
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
-def logout(authorization: str = Header(), _: Principal = Depends(require_user),
-           conn: PgConnection = Depends(get_conn)):
-    token = authorization.split(" ", 1)[1].strip()
+def logout(creds: HTTPAuthorizationCredentials = Security(bearer_scheme),
+           _: Principal = Depends(require_user), conn: PgConnection = Depends(get_conn)):
+    token = creds.credentials
     with conn.cursor() as cur:
         cur.execute("UPDATE sesi SET aktif = FALSE WHERE token_hash = %s", (sha256_hex(token),))
     return Response(status_code=status.HTTP_204_NO_CONTENT)
