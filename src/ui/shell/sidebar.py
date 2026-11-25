@@ -47,7 +47,7 @@ class NavButton(QPushButton):
         m = self.layout()
         if collapsed:
             self.setFixedSize(44, 44)
-            m.setContentsMargins(12, 0, 0, 0)
+            m.setContentsMargins(12, 0, 12, 0)
         else:
             self.setMinimumSize(0, 42)
             self.setMaximumSize(16777215, 42)
