@@ -224,31 +224,34 @@ class _TabButton(QPushButton):
         self.setCheckable(True)
         self.setAutoExclusive(True)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setFixedHeight(36)
-        lay = hbox(8, (14, 0, 14 if count is None else 10, 0), self)
+        self.setFixedHeight(32)
+        lay = hbox(8, (14, 0, 14 if count is None else 6, 0), self)
         self._label = text(label, Type.LABEL, Color.TEXT_SECONDARY)
         lay.addWidget(self._label)
         self._count = None
         if count is not None:
             self._count = QLabel(count)
             self._count.setFont(font(Type.CAPTION, weight=700))
+            self._count.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            self._count.setFixedHeight(22)
+            self._count.setMinimumWidth(22)
             lay.addWidget(self._count)
         self.toggled.connect(self._style)
         self._style(False)
 
     def sizeHint(self) -> QSize:  # noqa: N802
-        return QSize(self.layout().sizeHint().width(), 36)
+        return QSize(self.layout().sizeHint().width(), 32)
 
     def _style(self, on: bool) -> None:
         self.setStyleSheet(
-            f"QPushButton {{ background: {Color.BRAND if on else 'transparent'}; border: none; border-radius: 18px; }}"
+            f"QPushButton {{ background: {Color.BRAND if on else 'transparent'}; border: none; border-radius: 16px; }}"
             + ("" if on else f"QPushButton:hover {{ background: {Color.CANVAS}; }}")
         )
         set_text_color(self._label, "#FFFFFF" if on else Color.TEXT_SECONDARY)
         if self._count:
             bg = TONES["blue"].mid if on else Color.CANVAS_ALT
             fg = Color.TEXT_PRIMARY if on else Color.TEXT_SECONDARY
-            self._count.setStyleSheet(f"background: {bg}; color: {fg}; border-radius: 9px; padding: 1px 7px;")
+            self._count.setStyleSheet(f"background: {bg}; color: {fg}; border-radius: 11px; padding: 0 7px;")
 
 
 class SegmentedTabs(QFrame):
@@ -260,9 +263,9 @@ class SegmentedTabs(QFrame):
         super().__init__(parent)
         self.setObjectName("Tabs")
         self.setStyleSheet(
-            f"QFrame#Tabs {{ background: {Color.SURFACE}; border: 1px solid {Color.BORDER}; border-radius: 23px; }}"
+            f"QFrame#Tabs {{ background: {Color.SURFACE}; border: 1px solid {Color.BORDER}; border-radius: 19px; }}"
         )
-        lay = hbox(2, (4, 4, 4, 4), self)
+        lay = hbox(2, (3, 3, 3, 3), self)
         self._group = QButtonGroup(self)
         for i, item in enumerate(items):
             label, count = (item, None) if isinstance(item, str) else item

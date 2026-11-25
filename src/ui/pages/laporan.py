@@ -90,7 +90,7 @@ class LaporanPage(Page):
         row3 = hbox(16)
         ph = PanelHeader("Kejadian produksi", f"{r['events']} kejadian, REJECT dicatat otomatis oleh AI", "Lihat kejadian")
         ph.action_clicked.connect(lambda: toast(self._win(), "info", "Halaman Kejadian", "Halaman ini dikerjakan pada Desktop P2."))
-        events = DataTable([("Waktu", 100, "L"), ("Jenis", 260, "L"), ("Sumber", 150, "L"), ("Keterangan", None, "L")],
+        events = DataTable([("Waktu", 10, "L"), ("Jenis", 20, "L"), ("Sumber", 14, "L"), ("Keterangan", 40, "L")],
                            ph, row_padding=10)
         for time, kind, source, note in r["events_list"]:
             events.add_row([text(time, Type.BODY_STRONG), _event_kind(kind), text(source, Type.BODY),

@@ -64,8 +64,8 @@ class ProdukPage(Page):
             cards.addWidget(AvailabilityCard(p, highlight=i == 0))
         left.addLayout(cards)
         self.table = DataTable(
-            [("SKU", 150, "L"), ("Nama produk", 300, "L"), ("Harga", 160, "R", 32), ("Ambang", 120, "R", 40),
-             ("Status", None, "L"), ("", 100, "R", 0)],
+            [("SKU", 12, "L"), ("Nama produk", 22, "L"), ("Harga", 12, "R"), ("Ambang", 9, "R"),
+             ("Status", 14, "L"), ("", 8, "R", 0)],
             PanelHeader("Daftar produk", f"{len(self.products)} SKU terdaftar"), row_padding=12)
         self.table.row_clicked.connect(self._load)
         self._fill_table()

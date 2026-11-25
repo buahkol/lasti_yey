@@ -50,8 +50,8 @@ class BatchPage(Page):
         self.body.addLayout(bar)
 
         self.table = DataTable(
-            [("Kode batch", 170, "L"), ("Produk", 250, "L"), ("Waktu", 190, "L"), ("Output", 120, "R", 32),
-             ("Persentase NG", None, "F", 40), ("Batch", 150, "L"), ("Inspeksi", 140, "L"), ("", 170, "R", 0)],
+            [("Kode batch", 10, "L"), ("Produk", 15, "L"), ("Waktu", 11, "L"), ("Output", 7, "R"),
+             ("Persentase NG", 17, "F", 32), ("Batch", 9, "L"), ("Inspeksi", 9, "L"), ("", 10, "R", 0)],
             row_padding=10)
         footer = QFrame()
         footer.setObjectName("Foot")

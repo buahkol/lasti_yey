@@ -1,7 +1,7 @@
 """DataTable: header row + clickable rows built from widgets (keeps badges and progress bars inline)."""
 
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtWidgets import QFrame, QWidget
+from PyQt6.QtWidgets import QFrame, QSizePolicy, QWidget
 
 from ..theme import TONES, Color, Type
 from .base import add_shadow, hbox, text, vbox
@@ -40,7 +40,12 @@ class _Row(QFrame):
 
 
 class DataTable(QFrame):
-    """columns: list of (title, width or None to stretch, align L | R | F (fill), optional right padding)."""
+    """Table whose columns share the width by weight, so every row lines up and gaps stay even.
+
+    columns: list of (title, weight, align L | R | F (fill), optional right padding).
+    A weight of None counts as 2. Weights are relative, for example 3 for a
+    product name and 1 for a short number.
+    """
 
     row_clicked = pyqtSignal(int)
 
@@ -64,9 +69,10 @@ class DataTable(QFrame):
 
     def _fill(self, row: _Row, cells: list, pad: int) -> None:
         lay = hbox(0, (20, pad, 16, pad), row)
-        for (title, width, align, *rest), cell in zip(self.columns, cells):
+        for (title, weight, align, *rest), cell in zip(self.columns, cells):
             box = QWidget()
-            right_pad = rest[0] if rest else (20 if align == "R" else 8)
+            box.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+            right_pad = rest[0] if rest else (24 if align == "R" else 16)
             b_lay = hbox(8, (0, 0, right_pad, 0), box)
             if isinstance(cell, str):
                 cell = text(cell, Type.BODY)
@@ -78,11 +84,7 @@ class DataTable(QFrame):
             else:
                 b_lay.addWidget(cell)
                 b_lay.addStretch(1)
-            if width is None:
-                lay.addWidget(box, 1)
-            else:
-                box.setFixedWidth(width)
-                lay.addWidget(box)
+            lay.addWidget(box, weight or 2)
 
     def add_row(self, cells: list, selected: bool = False) -> _Row:
         row = _Row()
