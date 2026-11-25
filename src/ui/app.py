@@ -1,5 +1,7 @@
 """Application flow: login page, then the main window with the Desktop P1 pages."""
 
+import gc
+import os
 import sys
 
 from PyQt6.QtCore import Qt
@@ -14,6 +16,7 @@ from .pages.login import LoginPage
 from .pages.produk import ProdukPage
 from .shell import AppWindow
 from .theme import apply_theme
+from .theme.scale import choose_scale
 
 
 class SiMonProApp:
@@ -49,9 +52,28 @@ class SiMonProApp:
         self.login.showMaximized()
 
 
-def run(argv: list | None = None) -> int:
+def _create_app(argv: list) -> QApplication:
+    """Create the QApplication with a UI scale that fits the current screen.
+
+    The screen size is only known once a QApplication exists, so the first
+    instance measures the screen and is replaced when a smaller scale is needed.
+    """
     QApplication.setHighDpiScaleFactorRoundingPolicy(Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
-    app = QApplication(argv or sys.argv)
+    if "QT_SCALE_FACTOR" in os.environ:
+        return QApplication(argv)
+    probe = QApplication(argv)
+    area = probe.primaryScreen().availableGeometry()
+    scale = choose_scale(area.width(), area.height())
+    if scale == 1.0:
+        return probe
+    del probe
+    gc.collect()
+    os.environ["QT_SCALE_FACTOR"] = f"{scale:g}"
+    return QApplication(argv)
+
+
+def run(argv: list | None = None) -> int:
+    app = _create_app(argv or sys.argv)
     app.setApplicationName("SiMonPro")
     apply_theme(app)
     simonpro = SiMonProApp()

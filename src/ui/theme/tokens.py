@@ -101,15 +101,17 @@ class TextStyle:
 
 
 class Type:
-    DISPLAY_XL = TextStyle("display", 44, 700, 50, -1.2)
-    DISPLAY = TextStyle("display", 32, 700, 38, -0.8)
-    TITLE = TextStyle("display", 22, 600, 28, -0.3)
-    HEADING = TextStyle("body", 17, 700, 24, -0.1)
-    BODY = TextStyle("body", 15, 400, 22)
-    BODY_STRONG = TextStyle("body", 15, 600, 22)
-    LABEL = TextStyle("body", 14, 600, 20)
-    CAPTION = TextStyle("body", 13, 500, 18)
-    OVERLINE = TextStyle("body", 12, 700, 16, 0.8, True)
+    # Sizes are for a 1920 px wide screen. Smaller screens shrink everything
+    # through the scale tiers in theme/scale.py.
+    DISPLAY_XL = TextStyle("display", 40, 700, 46, -1.0)
+    DISPLAY = TextStyle("display", 28, 700, 34, -0.6)
+    TITLE = TextStyle("display", 19, 600, 24, -0.2)
+    HEADING = TextStyle("body", 15, 700, 22, -0.1)
+    BODY = TextStyle("body", 14, 400, 20)
+    BODY_STRONG = TextStyle("body", 14, 600, 20)
+    LABEL = TextStyle("body", 13, 600, 18)
+    CAPTION = TextStyle("body", 12, 500, 16)
+    OVERLINE = TextStyle("body", 11, 700, 14, 0.7, True)
 
 
 class Radius:
@@ -122,12 +124,12 @@ class Radius:
 
 
 class Size:
-    SIDEBAR_EXPANDED = 240
-    SIDEBAR_COLLAPSED = 80
-    BUTTON_MD = 44
-    BUTTON_SM = 36
-    INPUT = 46
-    ICON_BUTTON = 40
+    SIDEBAR_EXPANDED = 232
+    SIDEBAR_COLLAPSED = 76
+    BUTTON_MD = 40
+    BUTTON_SM = 32
+    INPUT = 42
+    ICON_BUTTON = 36
 
 
 # Business rule shown across the UI (PRD FR-26)

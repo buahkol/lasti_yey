@@ -48,7 +48,7 @@ class StatCard(QFrame):
         chip.setStyleSheet(f"background: {t.soft}; border: 1px solid {t.mid}; border-radius: 12px;")
         head.addWidget(chip)
         self.label = text(label, Type.LABEL, Color.TEXT_SECONDARY)
-        self.label.setFont(font(Type.LABEL, size=15))
+        self.label.setFont(font(Type.LABEL, size=14))
         head.addWidget(self.label, 1)
         lay.addLayout(head)
 

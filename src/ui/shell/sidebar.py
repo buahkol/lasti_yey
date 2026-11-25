@@ -26,7 +26,7 @@ class NavButton(QPushButton):
         self.icon.setFixedSize(20, 20)
         lay.addWidget(self.icon)
         self.label = text(label, Type.LABEL)
-        self.label.setFont(font(Type.LABEL, size=15))
+        self.label.setFont(font(Type.LABEL, size=14))
         lay.addWidget(self.label, 1)
         self.count = None
         if count:
@@ -75,7 +75,7 @@ class NavButton(QPushButton):
             f"NavButton:hover {{ background: {hover}; }}"
         )
         set_text_color(self.label, fg)
-        self.label.setFont(font(Type.LABEL, size=15, weight=700 if on else 600))
+        self.label.setFont(font(Type.LABEL, size=14, weight=700 if on else 600))
         icon_color = fg if (on or self.danger) else Color.SIDEBAR_ICON
         self.icon.setPixmap(pixmap(self.icon_name, icon_color, 20))
 

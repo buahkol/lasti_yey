@@ -74,7 +74,7 @@ def open_photo_viewer(window: QWidget, alert: tuple, product: str = "Sarden saus
     gap = score - threshold
     bar = ProgressBar("Skor anomali", f"{score:.2f}".replace(".", ","), score, "pink", "dari 1,00",
                       f"Melewati ambang {threshold:.2f} sebesar {gap:.2f}".replace(".", ","))
-    bar.set_value_size(22)
+    bar.set_value_size(19)
     sb.addWidget(bar)
     right.addWidget(score_box)
     info = vbox(0)

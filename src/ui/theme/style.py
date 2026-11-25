@@ -29,11 +29,11 @@ QPushButton[variant="{name}"]:pressed {{ padding-top: 1px; }}"""
 QPushButton[variant] {{ {css_font(Type.LABEL)} }}
 QPushButton[btnSize="md"] {{
     min-height: {Size.BUTTON_MD - 2}px; max-height: {Size.BUTTON_MD - 2}px;
-    border-radius: {Size.BUTTON_MD // 2}px; padding: 0 20px; font-size: 15px;
+    border-radius: {Size.BUTTON_MD // 2}px; padding: 0 18px; font-size: 14px;
 }}
 QPushButton[btnSize="sm"] {{
     min-height: {Size.BUTTON_SM - 2}px; max-height: {Size.BUTTON_SM - 2}px;
-    border-radius: {Size.BUTTON_SM // 2}px; padding: 0 14px;
+    border-radius: {Size.BUTTON_SM // 2}px; padding: 0 12px;
 }}
 QPushButton[variant]:disabled {{
     background: {Color.CANVAS_ALT}; color: {Color.TEXT_TERTIARY}; border-color: {Color.BORDER};
