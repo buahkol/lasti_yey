@@ -6,8 +6,8 @@ from PyQt6.QtWidgets import QFrame, QLabel, QSizePolicy, QWidget
 from .. import mock_data as data
 from ..assets import pixmap
 from ..components import (
-    Badge, Button, Card, DataTable, DatePicker, IconButton, InputField, PanelHeader, ProgressBar, format_range,
-    hbox, text, toast, vbox,
+    AdaptiveRow, Badge, Button, Card, DataTable, DatePicker, IconButton, InputField, PanelHeader, ProgressBar,
+    ResponsiveGrid, format_range, hbox, text, toast, vbox,
 )
 from ..shell import Page
 from ..theme import TONES, Color, Type
@@ -57,12 +57,13 @@ class ProdukPage(Page):
         add.clicked.connect(self._new)
         self.actions.addWidget(add)
 
-        body = hbox(16)
-        left = vbox(16)
-        cards = hbox(16)
+        body = AdaptiveRow(breakpoint=1180)
+        left_w = QWidget()
+        left = vbox(16, (0, 0, 0, 0), left_w)
+        cards = ResponsiveGrid(230, 3, 16, steps=(3, 1))
         for i, p in enumerate(self.products):
-            cards.addWidget(AvailabilityCard(p, highlight=i == 0))
-        left.addLayout(cards)
+            cards.add(AvailabilityCard(p, highlight=i == 0))
+        left.addWidget(cards)
         self.table = DataTable(
             [("SKU", 12, "L"), ("Nama produk", 22, "L"), ("Harga", 12, "R"), ("Ambang", 9, "R"),
              ("Status", 14, "L"), ("", 8, "R", 0)],
@@ -70,9 +71,9 @@ class ProdukPage(Page):
         self.table.row_clicked.connect(self._load)
         self._fill_table()
         left.addWidget(self.table, 1)
-        body.addLayout(left, 1)
-        body.addWidget(self._form())
-        self.body.addLayout(body, 1)
+        body.add(left_w, 1)
+        body.add(self._form(), 0, fixed_width=400)
+        self.body.addWidget(body, 1)
         self._load(0)
 
     def _fill_table(self) -> None:
@@ -91,7 +92,6 @@ class ProdukPage(Page):
 
     def _form(self) -> Card:
         card = Card((22, 22, 22, 22), 18)
-        card.setFixedWidth(460)
         head = hbox(8)
         col = vbox(2)
         self.form_title = text("Ubah produk", Type.TITLE)
