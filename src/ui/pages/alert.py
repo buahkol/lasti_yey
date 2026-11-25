@@ -2,11 +2,13 @@
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor, QPainter, QPen
-from PyQt6.QtWidgets import QFrame, QGridLayout, QLabel, QWidget
+from PyQt6.QtWidgets import QFrame, QLabel, QWidget
 
 from .. import mock_data as data
 from ..assets import pixmap
-from ..components import Button, DefectCard, LiveIndicator, SegmentedTabs, StatCard, hbox, text, toast, vbox
+from ..components import (
+    AdaptiveRow, Button, DefectCard, LiveIndicator, ResponsiveGrid, SegmentedTabs, StatCard, hbox, text, toast, vbox,
+)
 from ..shell import Page
 from ..theme import Color, Type
 from .common import open_photo_viewer
@@ -58,52 +60,45 @@ class AlertPage(Page):
         self.actions.addWidget(Button("30 menit terakhir", "outline", "md", "clock"))
 
         a = data.ALERT_SUMMARY
-        stats = hbox(16)
-        stats.addWidget(StatCard("pink", "warning", "NG 30 menit terakhir", str(a["ng_30min"]), "kaleng",
-                                 a["ng_delta"], f"sejak pukul {a['since']}", "trend-up", highlight_value=True))
-        stats.addWidget(StatCard("indigo", "activity", "Skor anomali rata-rata", f"{a['avg_score']:.2f}".replace(".", ","),
-                                 "", "ambang 0,62", "B-2411-01"))
-        stats.addWidget(StatCard("blue", "trend-up", "Skor tertinggi", f"{a['top_score']:.2f}".replace(".", ","), "",
-                                 a["top_batch"], f"pukul {a['top_time']}"))
-        stats.addWidget(StatCard("amber", "layers", "Batch terdampak", str(a["affected_batches"]), "batch", "HOLD",
-                                 "B-2411-01 dan B-2411-02"))
-        self.body.addLayout(stats)
+        stats = ResponsiveGrid(220, 4, 16, steps=(4, 2, 1))
+        stats.add(StatCard("pink", "warning", "NG 30 menit terakhir", str(a["ng_30min"]), "kaleng",
+                           a["ng_delta"], f"sejak pukul {a['since']}", "trend-up", highlight_value=True))
+        stats.add(StatCard("indigo", "activity", "Skor anomali rata-rata", f"{a['avg_score']:.2f}".replace(".", ","),
+                           "", "ambang 0,62", "B-2411-01"))
+        stats.add(StatCard("blue", "trend-up", "Skor tertinggi", f"{a['top_score']:.2f}".replace(".", ","), "",
+                           a["top_batch"], f"pukul {a['top_time']}"))
+        stats.add(StatCard("amber", "layers", "Batch terdampak", str(a["affected_batches"]), "batch", "HOLD",
+                           "B-2411-01 dan B-2411-02"))
+        self.body.addWidget(stats)
 
-        bar = hbox(12)
+        bar = AdaptiveRow(spacing=12)
         batches = sorted({al[0] for al in data.ALERTS})
         items = [("Semua batch", str(len(data.ALERTS)))] + [
             (b, str(sum(1 for al in data.ALERTS if al[0] == b))) for b in batches]
         self._batches = [None] + batches
         tabs = SegmentedTabs(items)
         tabs.changed.connect(self._filter)
-        bar.addWidget(tabs)
-        bar.addStretch(1)
-        bar.addWidget(_DashedRing())
-        bar.addWidget(text("Area skor anomali tertinggi dari PatchCore", Type.CAPTION, Color.TEXT_SECONDARY))
-        self.body.addLayout(bar)
+        bar.add(tabs, 0, align=Qt.AlignmentFlag.AlignLeft)
+        bar.add_stretch()
+        legend = QWidget()
+        l_lay = hbox(8, (0, 0, 0, 0), legend)
+        l_lay.addWidget(_DashedRing())
+        l_lay.addWidget(text("Area skor anomali tertinggi dari PatchCore", Type.CAPTION, Color.TEXT_SECONDARY))
+        bar.add(legend, 0, align=Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        self.body.addWidget(bar)
 
-        self.grid_host = QWidget()
-        self.grid = QGridLayout(self.grid_host)
-        self.grid.setSpacing(16)
-        self.grid.setContentsMargins(0, 0, 0, 0)
-        self.body.addWidget(self.grid_host, 1)
+        self.grid = ResponsiveGrid(250, 4, 16, steps=(4, 3, 2, 1))
+        self.body.addWidget(self.grid, 1)
         self._filter(0)
 
     def _filter(self, index: int) -> None:
         batch = self._batches[index]
-        while self.grid.count():
-            w = self.grid.takeAt(0).widget()
-            if w:
-                w.deleteLater()
+        self.grid.clear()
         alerts = [al for al in data.ALERTS if batch is None or al[0] == batch]
         for i, al in enumerate(alerts):
             code, time, score, thr, defect = al
             card = DefectCard(code, time, score, thr, defect, highlight=i == 0 and batch is None)
             card.clicked.connect(lambda a=al: open_photo_viewer(self._win(), a))
-            self.grid.addWidget(card, i // 4, i % 4)
-        n = len(alerts)
-        older = _OlderTile(lambda: toast(self._win(), "info", "Riwayat dan klaim",
-                                         "Halaman ini dikerjakan pada Desktop P2."))
-        self.grid.addWidget(older, n // 4, n % 4)
-        for c in range(4):
-            self.grid.setColumnStretch(c, 1)
+            self.grid.add(card)
+        self.grid.add(_OlderTile(lambda: toast(self._win(), "info", "Riwayat dan klaim",
+                                               "Halaman ini dikerjakan pada Desktop P2.")))
