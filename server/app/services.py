@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import io
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 
 from fastapi import HTTPException, status
@@ -17,6 +17,13 @@ def compute_inspection_status(batch_status: str, total: int, ng: int, tolerance:
     if batch_status != "DITUTUP" or total == 0:
         return "HOLD"
     return "PASSED" if ng / total <= tolerance else "HOLD"
+
+
+def today_local(conn: PgConnection) -> date:
+    """Today's date in the DB session time zone (Asia/Jakarta), not the OS time zone of the server."""
+    with conn.cursor() as cur:
+        cur.execute("SELECT current_date AS d")
+        return cur.fetchone()["d"]
 
 
 def get_batch(conn: PgConnection, batch_code: str, for_update: bool = False,

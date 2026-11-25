@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import JSONResponse
 from psycopg2.extensions import connection as PgConnection
 
 from ..deps import get_conn, require_user
@@ -24,12 +25,13 @@ def submit_shipment(body: ShipmentIn, conn: PgConnection = Depends(get_conn)):
         found = {r["kode_batch"]: r for r in cur.fetchall()}
         unknown = [c for c in codes if c not in found]
         if unknown:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST,
-                                {"message": "Kode batch tidak terdaftar", "unknownBatches": unknown})
+            return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST,
+                                content={"detail": "Kode batch tidak terdaftar", "unknownBatches": unknown})
         hold = [c for c in codes if found[c]["status_inspeksi"] != "PASSED"]
         if hold:
-            raise HTTPException(status.HTTP_409_CONFLICT,
-                                {"message": "Batch belum lolos inspeksi", "holdBatches": hold})
+            # FR-29: flat body {"detail": ..., "holdBatches": [...]} as in D2, so the app can list them.
+            return JSONResponse(status_code=status.HTTP_409_CONFLICT,
+                                content={"detail": "Batch belum lolos inspeksi", "holdBatches": hold})
         ok_total = sum(found[c]["ok"] for c in codes)
         if body.quantity > ok_total:
             raise HTTPException(status.HTTP_400_BAD_REQUEST,
