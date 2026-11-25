@@ -45,7 +45,7 @@ class Overlay(QWidget):
         content.setParent(self)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         window.installEventFilter(self)
-        self._backdrop = blurred(window.grab())
+        self._backdrop = blurred(window.grab(), radius=5.0)
         self.setGeometry(window.rect())
         self._center()
 
