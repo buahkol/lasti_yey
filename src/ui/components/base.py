@@ -1,7 +1,7 @@
 """Small building blocks shared by every component."""
 
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QColor
+from PyQt6.QtGui import QColor, QGuiApplication
 from PyQt6.QtWidgets import (
     QBoxLayout, QFrame, QGraphicsDropShadowEffect, QHBoxLayout, QLabel, QSizePolicy,
     QVBoxLayout, QWidget,
@@ -41,8 +41,20 @@ def vbox(spacing: int = 8, margins=(0, 0, 0, 0), parent: QWidget | None = None) 
     return lay
 
 
+def _fractional_scale() -> bool:
+    screen = QGuiApplication.primaryScreen()
+    return screen is not None and abs(screen.devicePixelRatio() - round(screen.devicePixelRatio())) > 0.01
+
+
 def add_shadow(widget: QWidget, kind: str = "card") -> None:
-    """Soft elevation (Figma Shadow/Card and Shadow/Pop)."""
+    """Soft elevation (Figma Shadow/Card and Shadow/Pop).
+
+    Qt draws graphics effects with seams and blurry text when the screen scale
+    is fractional (for example 0.85 or 1.25), so cards keep only their border
+    there.
+    """
+    if _fractional_scale():
+        return
     effect = QGraphicsDropShadowEffect(widget)
     if kind == "pop":
         effect.setBlurRadius(48)
