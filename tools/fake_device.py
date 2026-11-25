@@ -6,7 +6,7 @@ tally to compare with the dashboard (K6) and the per-can round-trip time (K4).
 Also the demo backup if the device or Wi-Fi fails.
 
 uv run python tools/fake_device.py --server http://endeavour:8000 --batch B-2311-01 \
-    --manifest dataset/manifests/DEMO-CAN.csv --split test --limit 40
+    --manifest dataset/manifests/DEMO-CAN.csv --data-root ~/goodsad --split test --limit 40
 uv run python tools/fake_device.py --batch B-2311-01 --dir some/folder --interval 1.5
 """
 
@@ -28,7 +28,15 @@ def load_items(a) -> list[tuple[Path, str]]:
     if a.manifest:
         with open(a.manifest, newline="") as f:
             rows = [r for r in csv.DictReader(f) if not a.split or r["split"] == a.split]
-        items = [(Path(r["path"]), r["label"]) for r in rows]
+        root = Path(a.data_root).expanduser() if a.data_root else None
+        items = []
+        for r in rows:
+            p = Path(r["path"])
+            if not p.is_absolute():
+                if root is None:
+                    raise SystemExit("Manifest has relative image paths; pass --data-root")
+                p = root / p
+            items.append((p, r["label"]))
     else:
         items = [(p, "?") for p in sorted(Path(a.dir).glob("*")) if p.suffix.lower() in {".jpg", ".jpeg", ".png"}]
     if a.shuffle:
@@ -44,6 +52,7 @@ def main() -> None:
     src = ap.add_mutually_exclusive_group(required=True)
     src.add_argument("--manifest")
     src.add_argument("--dir")
+    ap.add_argument("--data-root", help="folder the manifest paths are relative to")
     ap.add_argument("--split", default="test")
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--shuffle", action="store_true")

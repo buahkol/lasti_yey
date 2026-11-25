@@ -1,6 +1,7 @@
 """Build a PatchCore memory bank for one product from the manifest's train split (AI-01, AI-06).
 
-uv run python -m ml.build_memory_bank --manifest dataset/manifests/DEMO-CAN.csv --sku DEMO-CAN
+uv run python -m ml.build_memory_bank --manifest dataset/manifests/DEMO-CAN.csv \
+    --data-root ~/goodsad --sku DEMO-CAN
 Writes models/<sku>/v<N>.pt and an uncalibrated v<N>.json; run calibrate_threshold next.
 """
 
@@ -17,6 +18,8 @@ from ml.common import ROOT, read_manifest
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--manifest", type=Path, required=True)
+    ap.add_argument("--data-root", type=Path, default=None,
+                    help="folder the manifest paths are relative to (the one given to split_dataset)")
     ap.add_argument("--sku", required=True)
     ap.add_argument("--model-dir", type=Path, default=ROOT / "models")
     ap.add_argument("--backbone", default="wide_resnet50_2")
@@ -34,7 +37,7 @@ def main() -> None:
 
     from server.app.ml import patchcore as pc
 
-    rows = [r for r in read_manifest(a.manifest) if r.split == "train" and r.label == "ok"]
+    rows = [r for r in read_manifest(a.manifest, a.data_root) if r.split == "train" and r.label == "ok"]
     if not rows:
         raise SystemExit("No train/ok rows in manifest")
     device = pc.pick_device(a.device)
@@ -67,7 +70,9 @@ def main() -> None:
     )
     pt = pc.save_bank(a.model_dir, meta, bank)
     print(f"Saved {pt} (uncalibrated). Next: python -m ml.calibrate_threshold "
-          f"--manifest {a.manifest} --sku {a.sku} --version {version}")
+          f"--manifest {a.manifest}"
+          + (f" --data-root {a.data_root}" if a.data_root else "")
+          + f" --sku {a.sku} --version {version}")
 
 
 if __name__ == "__main__":

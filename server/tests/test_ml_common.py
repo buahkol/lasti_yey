@@ -40,3 +40,36 @@ def test_inspection_status_rule():
     assert compute_inspection_status("DITUTUP", 100, 5, 0.05) == "PASSED"
     assert compute_inspection_status("DITUTUP", 100, 6, 0.05) == "HOLD"
     assert compute_inspection_status("DITUTUP", 0, 0, 0.05) == "HOLD"
+
+
+def test_manifest_paths_are_relative_and_resolve(tmp_path):
+    from ml.common import read_manifest, write_manifest
+    from ml.split_dataset import from_raw
+
+    raw = tmp_path / "raw" / "SKU"
+    for label, cans in (("ok", ["c001", "c002", "c003", "c004", "c005"]), ("ng", ["c101", "c102"])):
+        (raw / label).mkdir(parents=True)
+        for c in cans:
+            (raw / label / f"{c}_1.jpg").write_bytes(b"")
+    rows = from_raw(raw, 42, (0.6, 0.2, 0.2), 0.5)
+    assert all(not r.path.startswith("/") and "\\" not in r.path for r in rows)
+    assert {r.path.split("/")[0] for r in rows} == {"ok", "ng"}
+
+    m = tmp_path / "m.csv"
+    write_manifest(m, rows)
+    moved = tmp_path / "elsewhere"
+    raw.rename(moved)  # same manifest, data in a different place
+    resolved = read_manifest(m, moved)
+    assert all((moved / r.path.split("elsewhere/")[1]).exists() for r in resolved)
+
+    import pytest
+    with pytest.raises(SystemExit):
+        read_manifest(m)  # relative paths need --data-root
+
+
+def test_absolute_manifest_paths_still_work(tmp_path):
+    from ml.common import Row, read_manifest, write_manifest
+
+    m = tmp_path / "m.csv"
+    write_manifest(m, [Row("/abs/a.jpg", "train", "ok", "g1")])
+    assert read_manifest(m)[0].path == "/abs/a.jpg"
