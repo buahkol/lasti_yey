@@ -214,12 +214,8 @@ class LaporanPage(Page):
         held = r["held"]
         head.addWidget(Badge("HOLD" if held else "PASSED"))
         card.layout_.addLayout(head)
+        card.layout_.addStretch(1)
         card.add(Gauge(r["ng_percent"], NG_TOLERANCE_PERCENT, 10.0), 0, Qt.AlignmentFlag.AlignHCenter)
-        scale = hbox(0)
-        scale.addWidget(text("0%", Type.CAPTION, Color.TEXT_TERTIARY))
-        scale.addStretch(1)
-        scale.addWidget(text("10%", Type.CAPTION, Color.TEXT_TERTIARY))
-        card.layout_.addLayout(scale)
         gap = f"{r['ng_percent'] - NG_TOLERANCE_PERCENT:.1f}".replace(".", ",")
         msg = (f"NG melewati batas {gap} poin. Batch tetap HOLD dan belum dapat dikirim." if held
                else "NG di bawah batas toleransi. Batch dapat dipilih saat mencatat pengiriman.")

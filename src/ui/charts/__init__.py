@@ -8,7 +8,7 @@ Hovering a bar moves the highlight and tooltip.
 
 import math
 
-from PyQt6.QtCore import QPointF, QRectF, Qt
+from PyQt6.QtCore import QEasingCurve, QPointF, QRectF, Qt, QVariantAnimation
 from PyQt6.QtGui import QColor, QFontMetrics, QLinearGradient, QPainter, QPainterPath, QPen
 from PyQt6.QtWidgets import QSizePolicy, QWidget
 
@@ -53,7 +53,29 @@ def _draw_tooltip(p: QPainter, anchor: QPointF, bounds: QRectF, title: str, valu
     p.drawText(QPointF(x + 14 + m_v.horizontalAdvance(value) + 10, vy), extra)
 
 
-class _BarBase(QWidget):
+class _Animated(QWidget):
+    def __init__(self):
+        super().__init__()
+        self._t = 1.0
+        self._anim = QVariantAnimation(self)
+        self._anim.setDuration(700)
+        self._anim.setStartValue(0.0)
+        self._anim.setEndValue(1.0)
+        self._anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+        self._anim.valueChanged.connect(self._step)
+
+    def _step(self, value: float) -> None:
+        self._t = value
+        self.update()
+
+    def showEvent(self, e):  # noqa: N802
+        self._anim.stop()
+        self._t = 0.0
+        self._anim.start()
+        super().showEvent(e)
+
+
+class _BarBase(_Animated):
     def __init__(self, labels: list, highlight: int):
         super().__init__()
         self.labels = labels
@@ -133,16 +155,18 @@ class StackedBarChart(_BarBase):
                 p.setBrush(QColor(Color.CHART_GRID))
                 p.drawRoundedRect(QRectF(x, pr.bottom() - 3, bw, 3), 1.5, 1.5)
                 continue
-            h_total = ok / m * pr.height()
-            h_ng = max(5.0, ng / m * pr.height() * 3)
+            h_total = ok / m * pr.height() * self._t
+            h_ng = max(5.0, ng / m * pr.height() * 3) * self._t
+            h_ok = h_total - h_ng - 2
             p.setPen(Qt.PenStyle.NoPen)
             p.setBrush(QColor(Color.CHART_OK if on else Color.CHART_OK_SOFT))
-            p.drawRoundedRect(QRectF(x, pr.bottom() - (h_total - h_ng - 2), bw, h_total - h_ng - 2), 5, 5)
+            if h_ok > 0:
+                p.drawRoundedRect(QRectF(x, pr.bottom() - h_ok, bw, h_ok), 5, 5)
             ng_c = QColor(Color.CHART_NG)
             ng_c.setAlphaF(1.0 if on else 0.7)
             p.setBrush(ng_c)
             p.drawRoundedRect(QRectF(x, pr.bottom() - h_total, bw, h_ng), 5, 5)
-            if on:
+            if on and self._t >= 1:
                 anchor = (QPointF(x + bw, pr.bottom() - h_total + 10), lab, ok, ng)
         if anchor:
             pt, lab, ok, ng = anchor
@@ -171,7 +195,7 @@ class PeakBarChart(_BarBase):
             c = self._col(i)
             bw = min(48.0, c.width() * 0.45)
             x = c.center().x() - bw / 2
-            h = ng / m * pr.height()
+            h = ng / m * pr.height() * self._t
             rect = QRectF(x, pr.bottom() - h, bw, h)
             path = QPainterPath()
             path.setFillRule(Qt.FillRule.WindingFill)
@@ -188,7 +212,7 @@ class PeakBarChart(_BarBase):
                 col.setAlphaF(1.0 if i == self.highlight else 0.75)
                 p.setBrush(col)
             p.drawPath(path.simplified())
-            if i != self.highlight:
+            if i != self.highlight or self._t < 1:
                 p.setFont(font(Type.CAPTION))
                 p.setPen(QColor(Color.TEXT_SECONDARY))
                 p.drawText(QRectF(c.left(), rect.top() - 22, c.width(), 18), Qt.AlignmentFlag.AlignHCenter, str(ng))
@@ -202,24 +226,24 @@ class PeakBarChart(_BarBase):
                           f"{ng} NG dari {out}", pct)
 
 
-class Gauge(QWidget):
+class Gauge(_Animated):
     """Semicircle gauge: value and limit in the same unit (percent)."""
 
     def __init__(self, value: float, limit: float, maximum: float = 10.0):
         super().__init__()
         self.value, self.limit, self.maximum = value, limit, maximum
-        self.setFixedSize(260, 150)
+        self.setFixedSize(320, 212)
 
     def paintEvent(self, _):  # noqa: N802
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        r, cx, cy, thick = 110.0, self.width() / 2, 140.0, 20.0
+        r, cx, cy, thick = 136.0, self.width() / 2, 172.0, 24.0
         rect = QRectF(cx - r + thick / 2, cy - r + thick / 2, 2 * r - thick, 2 * r - thick)
         pen = QPen(QColor(Color.CANVAS), thick)
         pen.setCapStyle(Qt.PenCapStyle.FlatCap)
         p.setPen(pen)
         p.drawArc(rect, 180 * 16, -180 * 16)
-        frac = max(0.0, min(1.0, self.value / self.maximum))
+        frac = max(0.0, min(1.0, self.value / self.maximum)) * self._t
         g = QLinearGradient(rect.left(), 0, rect.right(), 0)
         g.setColorAt(0, QColor(Color.INDIGO))
         g.setColorAt(0.7, QColor(Color.MAGENTA))
@@ -240,10 +264,13 @@ class Gauge(QWidget):
         p.setFont(font(Type.DISPLAY))
         p.setPen(QColor(Color.TEXT_PRIMARY))
         p.drawText(QRectF(0, cy - 62, self.width(), 40), Qt.AlignmentFlag.AlignHCenter,
-                   f"{self.value:.1f}%".replace(".", ","))
+                   f"{self.value * self._t:.1f}%".replace(".", ","))
         p.setFont(font(Type.CAPTION))
         p.setPen(QColor(Color.TEXT_TERTIARY))
         p.drawText(QRectF(0, cy - 22, self.width(), 18), Qt.AlignmentFlag.AlignHCenter, "persentase NG")
+        p.setPen(QColor(Color.TEXT_TERTIARY))
+        for edge, label in ((rect.left(), "0%"), (rect.right(), f"{self.maximum:g}%")):
+            p.drawText(QRectF(edge - 30, cy + 8, 60, 18), Qt.AlignmentFlag.AlignHCenter, label)
 
 
 __all__ = ["StackedBarChart", "PeakBarChart", "Gauge"]
