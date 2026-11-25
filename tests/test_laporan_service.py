@@ -4,22 +4,29 @@ from src.services.LaporanService import LaporanService
 
 
 class FakeLaporanDb:
+    """Answers every query LaporanService issues, matched on a distinctive fragment of its SQL.
+
+    Keep the fragments in sync with the SQL in LaporanService: if a query is not recognised the
+    fake returns [] and the service reports "Tidak ada data" (this is how the produk_id rename
+    broke the test before).
+    """
+
     def execute_query(self, sql, params=None):
         normalized = " ".join(sql.split()).lower()
 
-        if "left join detail_defect dd on dd.produksi_id = ph.produksi_id" in normalized:
-            return [{"bulan": date(2026, 4, 1), "total_produksi": 300, "jumlah_defect": 15}]
-        if "count(distinct ph.kode_produk)" in normalized:
+        if "count(distinct ph.produk_id)" in normalized:  # ringkasan: produksi
             return [{"total_aktual": 300, "hari_kerja": 6, "jumlah_produk": 3}]
-        if "from detail_defect dd" in normalized:
+        if "as total_defect" in normalized:  # ringkasan: total defect
             return [{"total_defect": 15}]
-        if "from target_produksi" in normalized and "total_target" in normalized:
+        if "as total_target" in normalized:  # ringkasan: total target
             return [{"total_target": 360}]
-        if "date_trunc('month', ph.tanggal)::date as bulan" in normalized and "sum(ph.jumlah_aktual)" in normalized and "group by bulan" in normalized:
+        if "produksi.total_produksi" in normalized:  # defect per bulan
+            return [{"bulan": date(2026, 4, 1), "total_produksi": 300, "jumlah_defect": 15}]
+        if "as aktual" in normalized and "group by bulan" in normalized:  # pencapaian per bulan
             return [{"bulan": date(2026, 4, 1), "aktual": 300}]
-        if "sum(jumlah_target)" in normalized and "as target" in normalized:
+        if "as target" in normalized:  # target satu bulan
             return [{"target": 360}]
-        if "join produksi_harian ph on ph.kode_produk = p.kode_produk" in normalized:
+        if "join produksi_harian ph on ph.produk_id = p.produk_id" in normalized and "group by" in normalized:
             return [
                 {"nama_produk": "Kaos", "aktual": 180},
                 {"nama_produk": "Kemeja", "aktual": 120},
@@ -29,13 +36,13 @@ class FakeLaporanDb:
                 {"nama_defect": "Kecacatan Fisik", "jumlah": 10},
                 {"nama_defect": "Kesalahan Proses", "jumlah": 5},
             ]
-        return []
+        return []  # e.g. kendala produksi: none
 
 
 class EmptyLaporanDb:
     def execute_query(self, sql, params=None):
         normalized = " ".join(sql.split()).lower()
-        if "count(distinct ph.kode_produk)" in normalized:
+        if "count(distinct ph.produk_id)" in normalized:
             return [{"total_aktual": 0, "hari_kerja": 0, "jumlah_produk": 0}]
         return []
 

@@ -51,6 +51,9 @@ explicit = true
 [tool.pytest.ini_options]
 testpaths = ["tests", "server/tests"]
 pythonpath = ["."]
+markers = [
+    "legacy_schema: needs the old textile-app schema that database/init.sql no longer defines (skipped with a reason)",
+]
 
 [tool.ruff]
 line-length = 120
