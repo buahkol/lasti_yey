@@ -49,6 +49,9 @@ async def inspect_package(
 
     def _store() -> int:
         try:
+            # Re-check under a shared lock: the batch may have been closed during inference.
+            # Locking only here (not for the whole upload) keeps a slow device from blocking a close.
+            require_open_batch(conn, batch_code, lock=True)
             with conn.cursor() as cur:
                 cur.execute(
                     """INSERT INTO inspeksi (kode_batch, hasil, skor_anomali, skor_mentah, ambang_batas,
