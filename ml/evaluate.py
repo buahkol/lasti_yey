@@ -2,7 +2,8 @@
 
 Writes doc/model_eval/<sku>_<version>/{metrics.json, scores.csv, confusion.png, scores.png, README.md}
 
-uv run python -m ml.evaluate --manifest dataset/manifests/DEMO-CAN.csv --sku DEMO-CAN
+uv run python -m ml.evaluate --manifest dataset/manifests/DEMO-CAN.csv \
+    --data-root ~/goodsad --sku DEMO-CAN
 """
 
 from __future__ import annotations
@@ -50,6 +51,8 @@ def _plots(out: Path, norm: list[float], labels: list[bool], thr: float, cm: dic
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--manifest", type=Path, required=True)
+    ap.add_argument("--data-root", type=Path, default=None,
+                    help="folder the manifest paths are relative to (the one given to split_dataset)")
     ap.add_argument("--sku", required=True)
     ap.add_argument("--version", default="")
     ap.add_argument("--model-dir", type=Path, default=ROOT / "models")
@@ -69,7 +72,7 @@ def main() -> None:
     extractor = pc.FeatureExtractor(meta.backbone, meta.feature_dim).to(device)
     model = pc.PatchCore.load(a.model_dir, a.sku, version, extractor)
 
-    rows = [r for r in read_manifest(a.manifest) if r.split == "test"]
+    rows = [r for r in read_manifest(a.manifest, a.data_root) if r.split == "test"]
     labels = [r.is_ng for r in rows]
     model.raw_score(__import__("PIL.Image", fromlist=["Image"]).new("RGB", (64, 64)))  # warm-up
     raws, lat = score_rows(model, rows)

@@ -10,6 +10,10 @@ Two sources:
       <root>/<category>/train/good/*.jpg, <root>/<category>/test/<type>/*.jpg
   train/good -> train; test/* split into val/test, grouped by filename prefix.
 
+Image paths in the manifest are relative to ``--raw`` / ``--root``; give the
+same folder as ``--data-root`` to build_memory_bank, calibrate_threshold,
+evaluate and tools/fake_device.py.
+
 Examples
 --------
 uv run python -m ml.split_dataset raw --raw dataset/raw/SRD-TOMAT-155G \
@@ -32,6 +36,11 @@ IMG_EXT = {".jpg", ".jpeg", ".png", ".bmp"}
 
 def _images(d: Path) -> list[Path]:
     return sorted(p for p in d.glob("*") if p.suffix.lower() in IMG_EXT)
+
+
+def _rel(p: Path, root: Path) -> str:
+    """Path relative to the source folder, POSIX style, so manifests are portable."""
+    return p.relative_to(root).as_posix()
 
 
 def _group_of(p: Path) -> str:
@@ -64,16 +73,16 @@ def from_raw(raw: Path, seed: int, ok_frac: tuple[float, float, float], ng_val: 
     split_of = {**{g: "train" for g in train_g}, **{g: "val" for g in val_g},
                 **{g: "test" for g in test_g}, **{g: "val" for g in ngv_g}, **{g: "test" for g in ngt_g}}
     for p in ok:
-        rows.append(Row(str(p), split_of[_group_of(p)], "ok", _group_of(p)))
+        rows.append(Row(_rel(p, raw), split_of[_group_of(p)], "ok", _group_of(p)))
     for p in ng:
-        rows.append(Row(str(p), split_of[_group_of(p)], "ng", _group_of(p)))
+        rows.append(Row(_rel(p, raw), split_of[_group_of(p)], "ng", _group_of(p)))
     return rows
 
 
 def from_goodsad(root: Path, category: str, seed: int, val_frac: float) -> list[Row]:
     rng = random.Random(seed)
     cat = root / category
-    rows = [Row(str(p), "train", "ok", f"train-{_group_of(p)}") for p in _images(cat / "train" / "good")]
+    rows = [Row(_rel(p, root), "train", "ok", f"train-{_group_of(p)}") for p in _images(cat / "train" / "good")]
     by_group: dict[str, list[tuple[Path, str]]] = defaultdict(list)
     for tdir in sorted(d for d in (cat / "test").iterdir() if d.is_dir()):
         for p in _images(tdir):
@@ -83,7 +92,8 @@ def from_goodsad(root: Path, category: str, seed: int, val_frac: float) -> list[
     for g, items in by_group.items():
         for p, kind in items:
             label = "ok" if kind == "good" else "ng"
-            rows.append(Row(str(p), "val" if g in val_set else "test", label, g, "" if label == "ok" else kind))
+            rows.append(Row(_rel(p, root), "val" if g in val_set else "test", label, g,
+                            "" if label == "ok" else kind))
     return rows
 
 
@@ -115,11 +125,13 @@ def main() -> None:
 
     if a.source == "raw":
         fr = tuple(float(x) for x in a.ok_split.split(","))
-        rows = from_raw(a.raw, a.seed, fr, a.ng_val)
+        rows = from_raw(a.raw.expanduser(), a.seed, fr, a.ng_val)
     else:
         rows = from_goodsad(a.root.expanduser(), a.category, a.seed, a.val_frac)
     write_manifest(a.out, rows)
-    print(f"Wrote {a.out} ({len(rows)} images)\n{summary(rows)}")
+    root = a.raw if a.source == "raw" else a.root
+    print(f"Wrote {a.out} ({len(rows)} images, paths relative to {root}; "
+          f"pass --data-root {root} to the other scripts)\n{summary(rows)}")
 
 
 if __name__ == "__main__":
