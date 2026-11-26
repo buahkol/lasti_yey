@@ -209,7 +209,7 @@ def test_shipments(client, user, device):
 
     r = client.post(f"{API}/shipments", headers=user,
                     json={"orderId": "PO-1", "batchCodes": ["B-S1", "B-S2"], "quantity": 3})
-    assert r.status_code == 409 and r.json()["detail"]["holdBatches"] == ["B-S2"]
+    assert r.status_code == 409 and r.json()["holdBatches"] == ["B-S2"]
     r = client.post(f"{API}/shipments", headers=user,
                     json={"orderId": "PO-1", "batchCodes": ["NOPE"], "quantity": 3})
     assert r.status_code == 400

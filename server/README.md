@@ -54,6 +54,20 @@ schema of `DB_NAME`**, so point them at a test database:
 DB_HOST=localhost DB_PORT=5433 DB_NAME=simonpro_test uv run pytest server/tests
 ```
 
+PowerShell (Windows):
+
+```powershell
+$env:DB_NAME = "simonpro_test"   # DB_HOST/DB_PORT default to localhost:5433
+uv run pytest
+```
+
+Safety: the root `conftest.py` defaults `DB_NAME` to `simonpro_test` and aborts the run when
+`DB_NAME` does not end in `_test`. `docker compose` creates `simonpro_test` on first start; on an
+existing volume create it once with
+`docker compose exec postgres psql -U postgres -c "CREATE DATABASE simonpro_test;"`.
+A bare `pytest` also runs the desktop tests in `tests/`. Those marked `legacy_schema` test the old
+textile app and are skipped with a reason until the desktop is migrated to the REST API.
+
 ## Offline install (flaky network / DNS)
 
 On endeavour, Nix-built `uv` resolves DNS directly against Tailscale MagicDNS (100.100.100.100),

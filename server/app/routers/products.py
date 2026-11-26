@@ -10,6 +10,7 @@ from psycopg2.extensions import connection as PgConnection
 from ..db import is_unique_violation
 from ..deps import get_conn, require_user
 from ..schemas import AvailabilityOut, ProductIn, ProductOut, ProductUpdate
+from ..services import today_local
 
 router = APIRouter(prefix="/products", tags=["products"], dependencies=[Depends(require_user)])
 
@@ -54,7 +55,7 @@ def update_product(sku: str, body: ProductUpdate, conn: PgConnection = Depends(g
 def availability(sku: str, date_: date | None = Query(default=None, alias="date"),
                  conn: PgConnection = Depends(get_conn)):
     """Cans that passed inspection for this product on the date (shipments not subtracted)."""
-    day = date_ or date.today()
+    day = date_ or today_local(conn)
     with conn.cursor() as cur:
         cur.execute("SELECT 1 FROM produk WHERE sku = %s", (sku,))
         if cur.fetchone() is None:
@@ -62,8 +63,8 @@ def availability(sku: str, date_: date | None = Query(default=None, alias="date"
         cur.execute(
             """SELECT count(*) FILTER (WHERE i.hasil = 'OK') AS ok, max(i.waktu) AS last
                FROM inspeksi i JOIN batch b ON b.kode_batch = i.kode_batch
-               WHERE b.sku = %s AND i.waktu::date = %s""",
-            (sku, day),
+               WHERE b.sku = %s AND i.waktu >= %s AND i.waktu < %s + 1""",
+            (sku, day, day),
         )
         r = cur.fetchone()
     return AvailabilityOut(sku=sku, date=day, available_qty=r["ok"], updated_at=r["last"])

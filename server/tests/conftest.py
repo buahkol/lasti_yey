@@ -19,8 +19,8 @@ from PIL import Image
 from server.app.config import Settings
 from server.app.main import create_app
 from server.app.ml.inspector import StubInspector
+from server.tests.dbutil import assert_test_database, rebuild_schema
 
-ROOT = Path(__file__).resolve().parents[2]
 DEVICE_KEY = "simonpro-dev-key-01"
 WIB = timezone(timedelta(hours=7))
 
@@ -42,14 +42,9 @@ def _settings(tmp: Path) -> Settings:
 @pytest.fixture(scope="session")
 def settings(tmp_path_factory) -> Settings:
     s = _settings(tmp_path_factory.mktemp("simonpro"))
-    conn = psycopg2.connect(host=s.db_host, port=s.db_port, dbname=s.db_name, user=s.db_user,
-                            password=s.db_password)
-    conn.autocommit = True
-    with conn.cursor() as cur:
-        cur.execute("DROP SCHEMA public CASCADE; CREATE SCHEMA public;")
-        cur.execute((ROOT / "database" / "init.sql").read_text())
-        cur.execute((ROOT / "database" / "dummy.sql").read_text())
-    conn.close()
+    assert_test_database(s.db_name)  # this fixture drops the public schema
+    rebuild_schema(host=s.db_host, port=s.db_port, dbname=s.db_name, user=s.db_user,
+                   password=s.db_password)
     return s
 
 
