@@ -1,0 +1,50 @@
+{
+  "sku": "PLS-Sarden",
+  "version": "v2",
+  "split": "test",
+  "manifest": "/home/pn/.local/share/simonpro/data/manifests/PLS-Sarden.csv",
+  "n_ok": 9,
+  "n_ng": 16,
+  "threshold": 0.211006,
+  "auroc": 1.0,
+  "tp": 16,
+  "fn": 0,
+  "tn": 6,
+  "fp": 3,
+  "recall": 1.0,
+  "specificity": 0.6667,
+  "accuracy": 0.88,
+  "targets": {
+    "K2_recall_min": 0.9,
+    "K3_specificity_min": 0.85,
+    "AI04_latency_ms_max": 500
+  },
+  "pass": {
+    "K2": true,
+    "K3": false,
+    "AI04": true
+  },
+  "latency_ms": {
+    "p50": 252.8,
+    "p95": 275.9,
+    "max": 280.7
+  },
+  "device": "cpu",
+  "model": {
+    "backbone": "wide_resnet50_2",
+    "image_size": 224,
+    "coreset_ratio": 0.1,
+    "bank_size": 2823,
+    "n_train_images": 36,
+    "calibration": {
+      "split": "val",
+      "n_ok": 20,
+      "n_ng": 8,
+      "target_recall": 0.9,
+      "auroc": 0.6937,
+      "recall": 1.0,
+      "specificity": 0.4,
+      "manifest": "/home/pn/.local/share/simonpro/data/manifests/PLS-Sarden.csv"
+    }
+  }
+}
