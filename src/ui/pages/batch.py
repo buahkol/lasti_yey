@@ -1,5 +1,7 @@
 """Batch (FR-05, FR-06, FR-27): list with filters, date range, create and close batch."""
 
+from datetime import date
+
 from PyQt6.QtCore import QDate, Qt
 from PyQt6.QtWidgets import QFrame, QSizePolicy, QWidget
 
@@ -27,7 +29,9 @@ class BatchPage(Page):
         self.filter_key = None
         self.sku = None
         self.page_index = 0
-        self.range = (QDate(2026, 11, 23), QDate(2026, 11, 25))
+        today = reports.today() if reports is not None else date.today()
+        self._today = QDate(today.year, today.month, today.day)
+        self.range = (self._today.addDays(-2), self._today)
 
         self.search = SearchField("Cari kode batch", 260)
         self.search.edit.textChanged.connect(lambda _: self._reset_page())
@@ -162,7 +166,7 @@ class BatchPage(Page):
         self._reset_page()
 
     def _pick_date(self) -> None:
-        picker = DatePicker(*self.range, QDate(2026, 11, 25), self)
+        picker = DatePicker(*self.range, self._today, self)
         picker.applied.connect(self._set_range)
         picker.popup_below(self.date_btn)
 
@@ -186,12 +190,13 @@ class BatchPage(Page):
             self._render()
         confirm_close_batch(self._win(), code, closed)
 
-    def _create_dialog(self, code: str = "B-2411-04") -> None:
+    def _create_dialog(self, code: str | None = None) -> None:
+        code = code or self._ctrl.suggest_code(self._today.toPyDate())
         card = ModalCard(480)
         holder: dict = {}
         card.header("layers", "Buat batch baru", "Batch langsung menerima data setelah disimpan",
                     lambda: holder["o"].close_overlay())
-        f_code = InputField("Kode batch", "Contoh: B-2411-04", code, "layers",
+        f_code = InputField("Kode batch", f"Contoh: {code}", code, "layers",
                             helper="Format B-TTBB-NN dan harus unik.")
         card.body.addWidget(f_code)
         products = self._ctrl.products()
@@ -235,7 +240,7 @@ class BatchPage(Page):
             p = chosen["p"]
             result = self._ctrl.create(f_code.value(), p)
             if result.error == "format":
-                f_code.set_error("Format kode batch belum sesuai, contoh B-2411-04.")
+                f_code.set_error(f"Format kode batch belum sesuai, contoh {self._ctrl.suggest_code(self._today.toPyDate())}.")
                 return
             holder["o"].close_overlay()
             value = f_code.value().strip().upper()

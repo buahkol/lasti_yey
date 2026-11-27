@@ -49,7 +49,7 @@ class _FolderCard(QFrame):
         shown = folder.preview[:3]
         if shown:
             for a in shown:
-                photo = CanPhoto(a.defect, (10, 10, 10, 10))
+                photo = CanPhoto(a.defect, (10, 10, 10, 10), inspection_id=a.inspection_id)
                 photo.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
                 p_lay.addWidget(photo, 1)
             for _ in range(3 - len(shown)):
@@ -241,7 +241,7 @@ class RiwayatPage(Page):
         self.photo_grid.clear()
         for a in photos:
             card = DefectCard(a.batch, f"{a.timestamp.day} {_MONTHS[a.timestamp.month - 1]}, {a.time}", a.score,
-                              a.threshold, a.defect, result=a.result)
+                              a.threshold, a.defect, result=a.result, inspection_id=a.inspection_id)
             card.clicked.connect(lambda al=a: open_photo_viewer(self._win(), al, show_folder=False))
             self.photo_grid.add(card)
         self.folder_empty.setVisible(not photos)

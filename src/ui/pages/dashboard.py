@@ -7,6 +7,7 @@ from PyQt6.QtWidgets import QFrame, QLabel, QSizePolicy, QWidget
 from ...controllers import DashboardController
 from ...controllers import BatchController
 from ...models import Batch, User
+from ...services import ServerUnavailable
 from .. import formatting as fmt
 from ..assets import icon
 from ..charts import StackedBarChart
@@ -105,6 +106,20 @@ class DashboardPage(Page):
         self.actions.addWidget(self.live)
         self.actions.addWidget(UserChip(user.name, initials=user.initials))
 
+        self._navigate = navigate
+        self._content: QWidget | None = None
+        self._build()
+
+        self._seconds = 2
+        self._timer = QTimer(self)
+        self._timer.timeout.connect(self._tick)
+        self._timer.start(1000)
+
+    def _build(self) -> None:
+        """(Re)build the cards from fresh data; the old widgets are replaced in place."""
+        navigate = self._navigate
+        holder = QWidget()
+        lay = vbox(16, (0, 0, 0, 0), holder)
         s = self._ctrl.stats()
         active = self._ctrl.active_batch()
         row1 = AdaptiveRow(breakpoint=1280)
@@ -124,7 +139,7 @@ class DashboardPage(Page):
         grid.add(StatCard("amber", "activity", "Kejadian produksi", str(s["events"]), "kejadian",
                           f"{s['events_reject']} REJECT", "dicatat otomatis"))
         row1.add(grid, 6)
-        self.body.addWidget(row1)
+        lay.addWidget(row1)
 
         row2 = AdaptiveRow(breakpoint=1200)
         left_w = QWidget()
@@ -145,18 +160,29 @@ class DashboardPage(Page):
         left.addWidget(self._today_batches(navigate))
         row2.add(left_w, 1)
         row2.add(self._alerts(navigate), 0, fixed_width=420)
-        self.body.addWidget(row2, 1)
+        lay.addWidget(row2, 1)
 
-        self._seconds = 2
-        self._timer = QTimer(self)
-        self._timer.timeout.connect(self._tick)
-        self._timer.start(1000)
+        if self._content is None:
+            self.body.addWidget(holder, 1)
+        else:
+            self.body.replaceWidget(self._content, holder)
+            self._content.deleteLater()
+        self._content = holder
 
     def _tick(self) -> None:
-        # FR-20: data refreshes every 5 seconds (mock: only the indicator changes)
+        # FR-20: data refreshes every 5 seconds while the dashboard is on screen
         self._seconds = 0 if self._seconds >= 5 else self._seconds + 1
+        if self._seconds == 0 and self.isVisible():
+            try:
+                self._build()
+            except ServerUnavailable:
+                self.live.set_text("Server tidak terhubung, mencoba lagi")
+                return
         self.live.set_text("Diperbarui baru saja" if self._seconds == 0 else f"Diperbarui {self._seconds} detik lalu")
         self.title.setText(f"{self._ctrl.greeting()}, {self._user.name}")
+
+    def on_show(self) -> None:
+        self._seconds = 5  # refresh on the next tick
 
     def _search(self) -> None:
         query = self.search.edit.text().strip()
@@ -223,7 +249,8 @@ class DashboardPage(Page):
         tl.addWidget(text(fmt.score(a["top_score"]), Type.TITLE, TONES["pink"].ink))
         card.add(top)
         for i, al in enumerate(self._ctrl.alerts(6)):
-            row = AlertRow(al.batch, f"Pukul {al.time}", fmt.score(al.score), al.defect, highlight=i == 0)
+            row = AlertRow(al.batch, f"Pukul {al.time}", fmt.score(al.score), al.defect, highlight=i == 0,
+                           inspection_id=al.inspection_id)
             row.clicked.connect(lambda a=al: open_photo_viewer(self._win(), a))
             card.add(row)
         card.layout_.addStretch(1)

@@ -54,7 +54,8 @@ class ProdukPage(Page):
         self.products = self._ctrl.products()
         self.current: int | None = None
         self.creating = False
-        self.date_btn = Button("Hari ini, 25 Nov 2026", "outline", "md", "calendar")
+        self._today = QDate.currentDate()
+        self.date_btn = Button(f"Hari ini, {format_range(self._today, self._today)}", "outline", "md", "calendar")
         self.date_btn.clicked.connect(self._pick_date)
         self.actions.addWidget(self.date_btn)
         add = Button("Tambah produk", "primary", "md", "plus")
@@ -64,10 +65,9 @@ class ProdukPage(Page):
         body = AdaptiveRow(breakpoint=1180)
         left_w = QWidget()
         left = vbox(16, (0, 0, 0, 0), left_w)
-        cards = ResponsiveGrid(230, 3, 16, steps=(3, 1))
-        for i, p in enumerate(self.products):
-            cards.add(AvailabilityCard(p, highlight=i == 0))
-        left.addWidget(cards)
+        self.cards = ResponsiveGrid(230, 3, 16, steps=(3, 1))
+        self._fill_cards()
+        left.addWidget(self.cards)
         self.table = DataTable(
             [("SKU", 12, "L"), ("Nama produk", 22, "L"), ("Harga", 12, "R"), ("Ambang", 9, "R"),
              ("Status", 14, "L"), ("", 8, "R", 0)],
@@ -80,6 +80,19 @@ class ProdukPage(Page):
         body.add(self.form, 0, fixed_width=400)
         self.body.addWidget(body, 1)
         self.form.hide()
+
+    def on_show(self) -> None:
+        """Reload from the server: availability changes with every inspected can."""
+        if self.form.isVisible():
+            return  # do not reset a form the operator is filling in
+        self.products = self._ctrl.products()
+        self._fill_cards()
+        self._fill_table()
+
+    def _fill_cards(self) -> None:
+        self.cards.clear()
+        for i, p in enumerate(self.products):
+            self.cards.add(AvailabilityCard(p, highlight=i == 0))
 
     def _fill_table(self) -> None:
         self.table.clear_rows()
@@ -189,7 +202,8 @@ class ProdukPage(Page):
         toast(self._win(), "success", "Produk tersimpan", f"Perubahan {product.sku} berhasil disimpan.")
 
     def _pick_date(self) -> None:
-        picker = DatePicker(QDate(2026, 11, 25), QDate(2026, 11, 25), QDate(2026, 11, 25), self)
+        t = self._today
+        picker = DatePicker(t, t, t, self)
         picker.applied.connect(lambda s, e: self.date_btn.setText(
-            "Hari ini, 25 Nov 2026" if s == e == QDate(2026, 11, 25) else format_range(s, e)))
+            f"Hari ini, {format_range(t, t)}" if s == e == t else format_range(s, e)))
         picker.popup_below(self.date_btn)

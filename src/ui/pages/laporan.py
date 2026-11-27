@@ -23,7 +23,6 @@ from ..shell import Page
 from ..theme import TONES, Color, Type
 from .common import open_export_pdf, open_photo_viewer
 
-_TODAY = QDate(2026, 11, 25)
 
 
 def _note(held: bool, message: str) -> QFrame:
@@ -65,8 +64,14 @@ class LaporanPage(Page):
         super().__init__("Laporan inspeksi batch")
         self._ctrl = controller
         self._win = window_getter
-        self.code = "B-2411-02"
-        self.range = (QDate(2026, 11, 23), _TODAY)
+        today = self._ctrl.today()
+        self._today = QDate(today.year, today.month, today.day)
+        # the running batch if there is one, otherwise the newest (the sample data opens on B-2411-02)
+        batches = self._ctrl.batches()
+        default = next((b for b in batches if b.running and b.code == "B-2411-02"), None) or \
+            next((b for b in batches if b.running), None) or (batches[0] if batches else None)
+        self.code = default.code if default else ""
+        self.range = (self._today.addDays(-2), self._today)
 
         self.mode = SegmentedTabs(["Per batch", "Per tanggal"])
         self.mode.changed.connect(self._set_mode)
@@ -102,15 +107,21 @@ class LaporanPage(Page):
             self.date_btn.setText(f" {format_range(*self.range)}")
         else:
             report = self._ctrl.batch_report(self.code)
-            self.date_btn.setText(f" {report['date']}" if report else " 25 Nov 2026")
+            self.date_btn.setText(f" {report['date']}" if report else f" {format_range(self._today, self._today)}")
         self.date_btn.setEnabled(per_date)
         self.date_btn.setToolTip("" if per_date else "Tanggal mengikuti batch yang dipilih")
+
+    def on_show(self) -> None:
+        """Reload: the running batch gets new inspections every few seconds."""
+        self._render_batch()
+        self._render_recap()
+        self._set_mode(self.stack.currentIndex())
 
     def show_batch(self, code: str) -> None:
         """Open the report of one batch, for example from the Batch page."""
         if self._ctrl.batch_report(code) is None:
             toast(self._win(), "info", f"Laporan {code} belum tersedia",
-                  "Data inspeksi batch ini belum ada di data contoh. Laporan B-2411-02 ditampilkan.")
+                  f"Batch ini belum punya data inspeksi. Laporan {self.code or 'sebelumnya'} tetap ditampilkan.")
         else:
             self.code = code
             self.batch_btn.setText(f" {code}")
@@ -130,7 +141,7 @@ class LaporanPage(Page):
         open_select(self.batch_btn, options, self.show_batch, self.code, "Cari kode batch atau produk")
 
     def _pick_date(self) -> None:
-        picker = DatePicker(*self.range, _TODAY, self)
+        picker = DatePicker(*self.range, self._today, self)
         picker.applied.connect(self._set_range)
         picker.popup_below(self.date_btn)
 
@@ -151,6 +162,12 @@ class LaporanPage(Page):
         lay = self._reset(self.batch_view)
         r = self._ctrl.batch_report(self.code)
         if r is None:
+            empty = text("Belum ada data inspeksi. Laporan muncul setelah kaleng pertama batch ini diperiksa."
+                         if self.code else "Belum ada batch. Buat batch di halaman Batch.",
+                         Type.BODY, Color.TEXT_TERTIARY, align=Qt.AlignmentFlag.AlignCenter)
+            empty.setContentsMargins(0, 48, 0, 48)
+            lay.addWidget(empty)
+            lay.addStretch(1)
             return
         stats = ResponsiveGrid(190, 5, 16, steps=(5, 3, 2, 1))
         stats.add(StatCard("blue", "camera", "Total diperiksa", fmt.num(r["total"]), "kaleng", "100%", r["window"]))
@@ -191,7 +208,8 @@ class LaporanPage(Page):
         tph.layout().setContentsMargins(10, 0, 0, 6)
         top.add(tph)
         for al in r["top_scores"]:
-            row = AlertRow(al.batch, f"Pukul {al.time}", fmt.score(al.score), al.defect)
+            row = AlertRow(al.batch, f"Pukul {al.time}", fmt.score(al.score), al.defect,
+                           inspection_id=al.inspection_id)
             row.clicked.connect(lambda a=al: open_photo_viewer(self._win(), a))
             top.add(row)
         top.layout_.addStretch(1)

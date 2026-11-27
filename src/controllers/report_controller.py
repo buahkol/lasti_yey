@@ -22,6 +22,10 @@ class ReportController:
     def batches(self) -> list[Batch]:
         return self._batches.list_batches()
 
+    def today(self) -> date:
+        """Today's date from the data source (the sample data has a fixed day)."""
+        return self._reports.today()
+
     def batch_report(self, code: str) -> dict | None:
         """Report for one batch, or None when the server has no inspection data for it yet."""
         batch = self._batches.find(code)

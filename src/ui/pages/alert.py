@@ -10,6 +10,7 @@ from .. import formatting as fmt
 from ..components import AdaptiveRow, DefectCard, LiveIndicator, ResponsiveGrid, SegmentedTabs, StatCard, hbox, text
 from ..shell import Page
 from ..theme import Color, Type
+from ..components.photo import real_photos
 from .common import open_photo_viewer
 
 
@@ -54,6 +55,7 @@ class AlertPage(Page):
         l_lay.addWidget(_DashedRing())
         l_lay.addWidget(text("Area skor anomali tertinggi dari PatchCore", Type.CAPTION, Color.TEXT_SECONDARY))
         bar.add(legend, 0, align=Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        legend.setVisible(not real_photos())  # camera photos have no painted anomaly ring
         self.body.addWidget(bar)
 
         self.grid = ResponsiveGrid(250, 4, 16, steps=(4, 3, 2, 1))
@@ -90,7 +92,8 @@ class AlertPage(Page):
         self.grid.clear()
         alerts = self._ctrl.alerts(self.window)
         for i, al in enumerate(alerts):
-            card = DefectCard(al.batch, al.time, al.score, al.threshold, al.defect, highlight=i == 0)
+            card = DefectCard(al.batch, al.time, al.score, al.threshold, al.defect, highlight=i == 0,
+                              inspection_id=al.inspection_id)
             card.clicked.connect(lambda a=al: open_photo_viewer(self._win(), a))
             self.grid.add(card)
         self.empty.setVisible(not alerts)

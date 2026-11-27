@@ -90,39 +90,58 @@ Untuk instalasi otomatis (Python, Docker, dependensi menggunakan **uv**, dan sho
 
 ## Cara Menjalankan Aplikasi
 
-Setelah seluruh prasyarat terpenuhi dan instalasi selesai, ikuti langkah-langkah berikut untuk menjalankan aplikasi:
+SiMonPro terdiri dari empat bagian yang berjalan bersamaan:
 
-1. **Pastikan container PostgreSQL aktif**
+| Bagian | Tempat berjalan | Panduan |
+|---|---|---|
+| PostgreSQL | Docker/Podman, port 5433 | langkah 1 di bawah |
+| Server REST API + PatchCore | edge server (atau laptop, CPU) | [`server/README.md`](server/README.md) |
+| Perangkat ESP32-S3 + OV5640 | kotak foto di lini | [`firmware/README.md`](firmware/README.md) |
+| Aplikasi desktop (PyQt6) | komputer operator | langkah 2 dan 3 di bawah |
 
-   ```bash
-   docker compose ps
-   ```
+Aplikasi desktop **tidak** membaca database langsung: semua data (produk, batch, inspeksi, foto,
+kejadian, laporan) diambil dari server lewat REST API `/api/v1`.
 
-   Jika container tidak berjalan, jalankan kembali dengan:
-
-   ```bash
-   docker compose up -d
-   ```
-
-2. **Jalankan aplikasi**
-
-   Gunakan **uv** untuk menjalankan aplikasi:
+1. **Jalankan PostgreSQL dan server**
 
    ```bash
-   uv run python main.py
+   docker compose up -d                       # atau: podman compose up -d
+   uv run uvicorn server.app.main:app --host 0.0.0.0 --port 8000
+   curl http://localhost:8000/api/v1/health   # menampilkan model yang dimuat dan device (cpu/cuda)
    ```
 
-   _(Atau `python main.py` jika virtual environment sudah aktif)_
+   Database yang dibuat sebelum 27 Nov 2026 perlu migrasi sekali (jenis kejadian bebas):
+   `docker compose exec -T postgres psql -U postgres -d simonpro < database/migrations/2026-11-27-event-kinds.sql`
+
+2. **Jalankan aplikasi desktop**
+
+   ```bash
+   uv run python main.py                                        # server di localhost:8000
+   SIMONPRO_API_URL=http://192.168.1.15:8000/api/v1 uv run python main.py   # server di komputer lain
+   ```
+
+   PowerShell: `$env:SIMONPRO_API_URL = "http://192.168.1.15:8000/api/v1"; uv run python main.py`
+
+   Tanpa server (hanya melihat tampilan dengan data contoh yang tetap): `SIMONPRO_SAMPLE=1 uv run python main.py`,
+   login `operasional` / `simonpro`.
 
 3. **Login ke aplikasi**
 
-   Setelah aplikasi terbuka, gunakan salah satu akun dummy berikut untuk masuk:
-   - Username: `owner` - Password: `owner123` (peran: Owner)
-   - Username: `admin` - Password: `admin123` (peran: Admin)
+   Akun dari `database/dummy.sql`: username `operasional`, password `operasional123`.
+   Ganti password ini sebelum demo atau dipakai di lini.
 
-4. **Menggunakan aplikasi**
+4. **Alur pemakaian**
 
-   Setelah berhasil login, Anda akan diarahkan ke halaman Dashboard yang menampilkan ringkasan performa produksi. Gunakan menu navigasi di sisi kiri untuk berpindah antar fitur. Untuk keluar dari aplikasi, klik tombol **Keluar** pada menu navigasi.
+   - **Produk**: daftarkan SKU dan harga satuan (dipakai untuk estimasi kerugian). Ambang batas dan versi
+     model terisi otomatis setelah server memuat model PatchCore untuk SKU tersebut.
+   - **Batch**: buat batch (format `B-YYMM-NN`, contoh `B-2611-01`), lalu arahkan perangkat ke batch itu
+     dengan perintah serial `batch B-2611-01` (lihat `firmware/README.md`).
+   - **Dashboard** diperbarui setiap 5 detik: output, OK/NG, grafik per jam, dan alert terbaru.
+   - **Alert** dan **Riwayat** menampilkan foto asli dari kamera untuk setiap kaleng yang diperiksa.
+   - **Kejadian**: catat kejadian manual (bahan baku habis, alat berhenti, atau jenis yang diketik sendiri).
+     REJECT dicatat otomatis oleh AI.
+   - **Laporan**: laporan per batch dan rekap per tanggal, bisa diekspor ke PDF.
+   - **Tutup batch** menghitung status akhir (PASSED jika NG paling banyak 5%, selain itu HOLD).
 
 ---
 

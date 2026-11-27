@@ -1,8 +1,9 @@
 """Entry point for the SiMonPro desktop application.
 
-Runs the new Desktop P1 interface (src/ui). Data is still hard-coded in
-src/ui/mock_data.py until the REST API is connected.
-Demo login: operasional / simonpro
+Runs the Desktop P1 interface (src/ui) against the SiMonPro REST API.
+Server address: SIMONPRO_API_URL (default http://localhost:8000/api/v1).
+Login: an account of the server, e.g. operasional / operasional123 from database/dummy.sql.
+Offline demo with the fixed sample data: SIMONPRO_SAMPLE=1 (login operasional / simonpro).
 """
 
 import sys

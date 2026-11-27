@@ -11,6 +11,6 @@ class EventService:
     def list_events(self, batch_code: str) -> list[ProductionEvent]:
         return list(self._events.get(batch_code, []))
 
-    def record(self, batch_code: str, event: ProductionEvent) -> ProductionEvent:
+    def record(self, batch_code: str, event: ProductionEvent, when=None) -> ProductionEvent:
         self._events.setdefault(batch_code, []).insert(0, event)
         return event

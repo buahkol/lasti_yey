@@ -1,8 +1,9 @@
 """Data access for the desktop app.
 
-The services read the sample data in sample_data.py for now. When the REST
-API is ready, replace the body of each method with a call to the API client;
-controllers and views do not need to change.
+Two interchangeable sets of services with the same methods:
+
+* ``api.py``: the SiMonPro REST API (default). Server address: SIMONPRO_API_URL.
+* the classes below: fixed sample data matching the Figma screens (SIMONPRO_SAMPLE=1, and the tests).
 """
 
 from .auth_service import AuthService
@@ -12,4 +13,6 @@ from .inspection_service import InspectionService
 from .product_service import ProductService
 from .report_service import ReportService
 
-__all__ = ["AuthService", "BatchService", "EventService", "InspectionService", "ProductService", "ReportService"]
+from .api_client import ApiClient, ApiError, ServerUnavailable, SessionExpired
+
+__all__ = ["ApiClient", "ApiError", "ServerUnavailable", "SessionExpired", "AuthService", "BatchService", "EventService", "InspectionService", "ProductService", "ReportService"]

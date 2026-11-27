@@ -17,7 +17,7 @@ class ProductController:
 
     def save(self, sku: str, name: str, price_text: str, is_new: bool) -> tuple[Product | None, dict]:
         """Validate the form. Returns the saved product, or field errors keyed by sku, name, price."""
-        sku = sku.strip().upper()
+        sku = sku.strip().upper() if is_new else sku.strip()  # an existing SKU is kept exactly as stored
         name = name.strip()
         price_text = price_text.replace(".", "").replace("Rp", "").strip()
         errors = {}

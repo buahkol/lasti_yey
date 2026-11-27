@@ -95,4 +95,5 @@ class EventController:
         if errors:
             return RecordResult(errors=errors)
         when = when or datetime.now()
-        return RecordResult(self._events.record(batch_code, ProductionEvent(f"{when:%H.%M}", kind, "Operator", note)))
+        event = ProductionEvent(f"{when:%H.%M}", kind, "Operator", note)
+        return RecordResult(self._events.record(batch_code, event, when))

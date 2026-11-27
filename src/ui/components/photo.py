@@ -1,9 +1,11 @@
 """Can photo placeholder, AlertRow and DefectCard.
 
-``CanPhoto`` paints a stand-in for the 640x480 ESP32-CAM image with the
-PatchCore anomaly highlight. Call ``set_pixmap()`` with the real photo from
-``GET /inspections/{id}/photo`` once the API is connected.
+``CanPhoto`` shows the real inspection photo (``GET /inspections/{id}/photo``) when it is given an
+``inspection_id`` and the app has registered a loader with ``set_photo_loader``. Without one (sample
+data, or the photo is missing) it paints a stand-in can with the PatchCore anomaly highlight.
 """
+
+from collections.abc import Callable
 
 from PyQt6.QtCore import QPointF, QRectF, Qt, pyqtSignal
 from PyQt6.QtGui import (
@@ -19,6 +21,38 @@ from .progress import ProgressBar
 from .status import Badge
 
 _W, _H = 240.0, 170.0
+THUMB_MAX_WIDTH = 320  # smaller widgets ask the server for the thumbnail
+
+_loader: Callable[[int, bool], bytes | None] | None = None
+_pixmaps: dict[tuple[int, bool], QPixmap | None] = {}
+
+
+def set_photo_loader(loader: Callable[[int, bool], bytes | None] | None) -> None:
+    """loader(inspection_id, thumb) -> JPEG bytes or None. None turns real photos off (sample data)."""
+    global _loader
+    _loader = loader
+    _pixmaps.clear()
+
+
+def real_photos() -> bool:
+    """True when camera photos are shown (API mode) instead of painted placeholders."""
+    return _loader is not None
+
+
+def _photo(inspection_id: int, thumb: bool) -> QPixmap | None:
+    key = (inspection_id, thumb)
+    if key not in _pixmaps:
+        pm = None
+        try:
+            data = _loader(inspection_id, thumb) if _loader else None
+        except Exception:  # noqa: BLE001 - a photo that cannot be loaded falls back to the placeholder
+            data = None
+        if data:
+            pm = QPixmap()
+            if not pm.loadFromData(data):
+                pm = None
+        _pixmaps[key] = pm
+    return _pixmaps[key]
 _HEAT = {"dent": (77, 68, 70), "rust": (154, 116, 60), "label": (164, 86, 70)}
 
 
@@ -26,13 +60,18 @@ class CanPhoto(QWidget):
     """Photo area. defect: dent | rust | label | none. radius: (tl, tr, br, bl)."""
 
     def __init__(self, defect: str = "dent", radius=(12, 12, 12, 12), heatmap: bool = True,
-                 parent: QWidget | None = None):
+                 parent: QWidget | None = None, inspection_id: int | None = None):
         super().__init__(parent)
         self.defect = defect
+        self.inspection_id = inspection_id
         self.radius = radius
         self.heatmap = heatmap
         self._pixmap: QPixmap | None = None
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+
+    def has_real_photo(self) -> bool:
+        """True when a camera photo is (or can be) shown instead of the painted placeholder."""
+        return bool(self._pixmap or (self.inspection_id and _loader and _photo(self.inspection_id, False)))
 
     def set_pixmap(self, pm: QPixmap | None) -> None:
         self._pixmap = pm
@@ -62,8 +101,11 @@ class CanPhoto(QWidget):
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         p.setClipPath(self._clip())
         w, h = self.width(), self.height()
-        if self._pixmap:
-            scaled = self._pixmap.scaled(w, h, Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+        pixmap = self._pixmap
+        if pixmap is None and self.inspection_id and _loader:
+            pixmap = _photo(self.inspection_id, w <= THUMB_MAX_WIDTH)
+        if pixmap:
+            scaled = pixmap.scaled(w, h, Qt.AspectRatioMode.KeepAspectRatioByExpanding,
                                          Qt.TransformationMode.SmoothTransformation)
             p.drawPixmap(int((w - scaled.width()) / 2), int((h - scaled.height()) / 2), scaled)
             return
@@ -144,7 +186,7 @@ class AlertRow(QFrame):
     clicked = pyqtSignal()
 
     def __init__(self, batch: str, time: str, score: str, defect: str = "dent",
-                 highlight: bool = False, parent: QWidget | None = None):
+                 highlight: bool = False, parent: QWidget | None = None, inspection_id: int | None = None):
         super().__init__(parent)
         self.setObjectName("AlertRow")
         self.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -154,7 +196,7 @@ class AlertRow(QFrame):
             f"QFrame#AlertRow:hover {{ background: {TONES['blue'].soft}; }}"
         )
         lay = hbox(12, (8, 8, 12, 8), self)
-        thumb = CanPhoto(defect, (12, 12, 12, 12), heatmap=True)
+        thumb = CanPhoto(defect, (12, 12, 12, 12), heatmap=True, inspection_id=inspection_id)
         thumb.setFixedSize(52, 48)
         lay.addWidget(thumb)
         col = vbox(2)
@@ -178,7 +220,8 @@ class DefectCard(QFrame):
     clicked = pyqtSignal()
 
     def __init__(self, batch: str, time: str, score: float, threshold: float, defect: str = "dent",
-                 highlight: bool = False, parent: QWidget | None = None, result: str = "NG"):
+                 highlight: bool = False, parent: QWidget | None = None, result: str = "NG",
+                 inspection_id: int | None = None):
         super().__init__(parent)
         self.setObjectName("DefectCard")
         self.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -186,7 +229,7 @@ class DefectCard(QFrame):
         self.setStyleSheet(f"QFrame#DefectCard {{ background: {Color.SURFACE}; border: {border}; border-radius: 18px; }}")
         add_shadow(self)
         lay = vbox(0, (1, 1, 1, 1), self)
-        self.photo = CanPhoto(defect, (17, 17, 0, 0))
+        self.photo = CanPhoto(defect, (17, 17, 0, 0), inspection_id=inspection_id)
         self.photo.setMinimumHeight(190)
         lay.addWidget(self.photo, 1)
         self._badge = Badge(result, self.photo)

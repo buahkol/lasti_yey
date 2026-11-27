@@ -72,6 +72,13 @@ class BatchController:
     def page_count(rows: list) -> int:
         return max(1, -(-len(rows) // PAGE_SIZE))
 
+    def suggest_code(self, today: date) -> str:
+        """Next free code for today in the B-YYMM-NN format, e.g. B-2611-03."""
+        prefix = f"B-{today:%y%m}-"
+        used = [int(b.code[len(prefix):]) for b in self._batches.list_batches()
+                if b.code.startswith(prefix) and b.code[len(prefix):].isdigit()]
+        return f"{prefix}{max(used, default=0) + 1:02d}"
+
     # commands ------------------------------------------------------------
     def create(self, code: str, product: Product) -> CreateResult:
         code = code.strip().upper()
@@ -88,6 +95,4 @@ class BatchController:
         batch = self._batches.find(code)
         if batch is None or not batch.running:
             return batch
-        batch.status = BatchStatus.CLOSED
-        batch.inspection = inspection_status(batch.ng_percent)
-        return self._batches.save(batch)
+        return self._batches.close(batch, inspection_status(batch.ng_percent))

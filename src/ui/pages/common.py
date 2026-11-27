@@ -1,7 +1,7 @@
 """Pop-ups shared by several pages: photo viewer and close-batch confirmation."""
 
 import os
-from datetime import date
+from datetime import date, timedelta
 
 from PyQt6.QtWidgets import QFileDialog, QFrame, QLabel, QSizePolicy, QWidget
 
@@ -30,14 +30,18 @@ def open_photo_viewer(window: QWidget, alert: Alert, show_folder: bool = True) -
     left.setStyleSheet(f"QFrame#ViewerLeft {{ background: {Color.BRAND_STRONG}; border-top-left-radius: 24px;"
                        " border-bottom-left-radius: 24px; }")
     l_lay = vbox(12, (20, 20, 20, 20), left)
-    photo = CanPhoto(defect, (16, 16, 16, 16))  # one photo, with the highest anomaly area marked
+    photo = CanPhoto(defect, (16, 16, 16, 16), inspection_id=alert.inspection_id)
     photo.setFixedSize(720, 510)
     l_lay.addWidget(photo)
     row = hbox(8)
-    row.addWidget(text("Lingkaran menandai area skor anomali tertinggi" if alert.result == "NG"
-                       else "Kaleng lolos inspeksi", Type.CAPTION, "rgba(255,255,255,0.6)"))
+    if alert.inspection_id and photo.has_real_photo():
+        caption = "Foto dari kamera inspeksi" + (", skor di atas ambang" if alert.result == "NG" else ", lolos inspeksi")
+    else:
+        caption = ("Lingkaran menandai area skor anomali tertinggi" if alert.result == "NG"
+                   else "Kaleng lolos inspeksi")
+    row.addWidget(text(caption, Type.CAPTION, "rgba(255,255,255,0.6)"))
     row.addStretch(1)
-    row.addWidget(text("640 x 480 piksel, ESP32-CAM", Type.CAPTION, "rgba(255,255,255,0.6)"))
+    row.addWidget(text("640 x 480 piksel, ESP32-S3 + OV5640", Type.CAPTION, "rgba(255,255,255,0.6)"))
     l_lay.addLayout(row)
     lay.addWidget(left)
 
@@ -161,8 +165,9 @@ def open_export_pdf(window: QWidget, reports, batch_code: str | None = None, sta
     batches = reports.batches()
     by_code = {b.code: b for b in batches}
     code = batch_code if batch_code in by_code else (batches[0].code if batches else "")
-    start = start or date(2026, 11, 23)
-    end = end or date(2026, 11, 25)
+    today = reports.today()
+    start = start or today - timedelta(days=2)
+    end = end or today
     state = {"code": code, "per_date": per_date}
 
     card = ModalCard(560)

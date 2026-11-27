@@ -4,7 +4,7 @@ from src.controllers import Controllers
 
 
 def make():
-    return Controllers.create()
+    return Controllers.create(use_api=False)
 
 
 def test_record_event_on_running_batch():

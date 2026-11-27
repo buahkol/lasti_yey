@@ -3,13 +3,16 @@
 import gc
 import os
 import sys
+import traceback
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QApplication
 
 from ..controllers import Controllers
 from ..models import User
+from ..services import ApiError, ServerUnavailable, SessionExpired
 from .components import toast
+from .components.photo import set_photo_loader
 from .pages.alert import AlertPage
 from .pages.batch import BatchPage
 from .pages.dashboard import DashboardPage
@@ -28,6 +31,8 @@ class SiMonProApp:
 
     def __init__(self):
         self.controllers = Controllers.create()
+        # real camera photos from the server; sample mode keeps the painted placeholders
+        set_photo_loader(self.controllers.api.photo if self.controllers.api else None)
         self.login = LoginPage(self.controllers.auth)
         self.login.login_success.connect(self._open_main)
         self.window: AppWindow | None = None
@@ -55,6 +60,21 @@ class SiMonProApp:
         self.window = win
         self.login.hide()
         toast(win, "success", "Berhasil masuk", f"Selamat bekerja, {user.name}.")
+
+    def handle_error(self, exc: BaseException) -> bool:
+        """Show a server problem to the operator instead of letting Qt abort. True when handled."""
+        target = self.window or self.login
+        if isinstance(exc, SessionExpired):
+            self._logout()
+            toast(self.login, "info", "Sesi berakhir", "Silakan masuk kembali.")
+            return True
+        if isinstance(exc, ServerUnavailable):
+            toast(target, "error", "Server tidak terhubung", str(exc))
+            return True
+        if isinstance(exc, ApiError):
+            toast(target, "error", "Permintaan ditolak server", exc.message)
+            return True
+        return False
 
     def _logout(self) -> None:
         self.controllers.auth.logout()
@@ -91,5 +111,16 @@ def run(argv: list | None = None) -> int:
     app.setApplicationName("SiMonPro")
     apply_theme(app)
     simonpro = SiMonProApp()
+
+    def excepthook(exc_type, exc, tb):
+        # PyQt6 aborts on an exception that escapes a slot; server errors become a message instead
+        try:
+            if simonpro.handle_error(exc):
+                return
+        except Exception:  # noqa: BLE001
+            pass
+        traceback.print_exception(exc_type, exc, tb)
+
+    sys.excepthook = excepthook
     simonpro.start()
     return app.exec()
