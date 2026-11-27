@@ -85,19 +85,6 @@ CREATE TABLE kejadian_produksi (
     id_inspeksi BIGINT          REFERENCES inspeksi(id)
 );
 
-CREATE TABLE pengiriman (
-    id            SERIAL      PRIMARY KEY,
-    nomor_pesanan VARCHAR(50) NOT NULL,
-    jumlah        INT         NOT NULL CHECK (jumlah > 0),
-    dibuat_pada   TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
-CREATE TABLE pengiriman_batch (
-    id_pengiriman INT         NOT NULL REFERENCES pengiriman(id) ON DELETE CASCADE,
-    kode_batch    VARCHAR(40) NOT NULL REFERENCES batch(kode_batch),
-    PRIMARY KEY (id_pengiriman, kode_batch)
-);
-
 CREATE INDEX idx_inspeksi_batch_waktu ON inspeksi (kode_batch, waktu);
 CREATE INDEX idx_inspeksi_hasil_waktu ON inspeksi (hasil, waktu);
 CREATE INDEX idx_output_batch         ON output_produksi (kode_batch);

@@ -40,7 +40,7 @@ class TestDatabaseConnection:
         tables = {r["table_name"] for r in db.execute_query(
             "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'")}
         assert {"pengguna", "sesi", "perangkat", "produk", "batch", "output_produksi", "inspeksi",
-                "kejadian_produksi", "pengiriman", "pengiriman_batch"} <= tables
+                "kejadian_produksi"} <= tables
         assert tables.isdisjoint({"users", "tipe_defect", "produksi_harian", "kategori_produk"})
 
     def test_seed_data(self, db):

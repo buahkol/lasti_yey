@@ -60,7 +60,7 @@ def clean_tables(settings):
     conn = psycopg2.connect(host=settings.db_host, port=settings.db_port, dbname=settings.db_name,
                             user=settings.db_user, password=settings.db_password)
     with conn, conn.cursor() as cur:
-        cur.execute("""TRUNCATE pengiriman_batch, pengiriman, kejadian_produksi, inspeksi,
+        cur.execute("""TRUNCATE kejadian_produksi, inspeksi,
                        output_produksi, batch, sesi RESTART IDENTITY CASCADE""")
     conn.close()
 
