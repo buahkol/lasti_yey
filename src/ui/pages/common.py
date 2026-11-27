@@ -15,8 +15,8 @@ from ...reports import batch_report_pdf, date_recap_pdf
 from ..theme import TONES, Color, Type
 
 
-def open_photo_viewer(window: QWidget, alert: Alert) -> Overlay:
-    """Full photo of one NG can with score details (FR-23)."""
+def open_photo_viewer(window: QWidget, alert: Alert, show_folder: bool = True) -> Overlay:
+    """Full photo of one inspected can (OK or NG) with score details (FR-23, FR-31)."""
     batch, time, score, threshold, defect = alert.batch, alert.time, alert.score, alert.threshold, alert.defect
     product = alert.product
     card = QFrame()
@@ -34,7 +34,8 @@ def open_photo_viewer(window: QWidget, alert: Alert) -> Overlay:
     photo.setFixedSize(720, 510)
     l_lay.addWidget(photo)
     row = hbox(8)
-    row.addWidget(text("Lingkaran menandai area skor anomali tertinggi", Type.CAPTION, "rgba(255,255,255,0.6)"))
+    row.addWidget(text("Lingkaran menandai area skor anomali tertinggi" if alert.result == "NG"
+                       else "Kaleng lolos inspeksi", Type.CAPTION, "rgba(255,255,255,0.6)"))
     row.addStretch(1)
     row.addWidget(text("640 x 480 piksel, ESP32-CAM", Type.CAPTION, "rgba(255,255,255,0.6)"))
     l_lay.addLayout(row)
@@ -42,7 +43,8 @@ def open_photo_viewer(window: QWidget, alert: Alert) -> Overlay:
 
     right = vbox(16, (24, 24, 24, 24))
     top = hbox(8)
-    top.addWidget(Badge("NG"))
+    is_ng = alert.result == "NG"
+    top.addWidget(Badge(alert.result))
     top.addStretch(1)
     close = IconButton("x", "Tutup", "soft")
     top.addWidget(close)
@@ -52,6 +54,8 @@ def open_photo_viewer(window: QWidget, alert: Alert) -> Overlay:
     months = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"]
     when = (f"{alert.timestamp.day} {months[alert.timestamp.month - 1]} {alert.timestamp.year}, pukul {time}"
             if alert.timestamp else f"Pukul {time}")
+    if alert.inspection_id:
+        when = f"Inspeksi nomor {alert.inspection_id}, {when}"
     head.addWidget(text(when, Type.CAPTION, Color.TEXT_TERTIARY))
     right.addLayout(head)
     score_box = QFrame()
@@ -62,14 +66,17 @@ def open_photo_viewer(window: QWidget, alert: Alert) -> Overlay:
     )
     sb = vbox(0, (16, 14, 16, 14), score_box)
     gap = score - threshold
-    bar = ProgressBar("Skor anomali", f"{score:.2f}".replace(".", ","), score, "pink", "dari 1,00",
-                      f"Melewati ambang {threshold:.2f} sebesar {gap:.2f}".replace(".", ","))
+    gap_text = (f"Melewati ambang {threshold:.2f} sebesar {gap:.2f}" if is_ng
+                else f"Di bawah ambang {threshold:.2f} sebesar {-gap:.2f}").replace(".", ",")
+    bar = ProgressBar("Skor anomali", f"{score:.2f}".replace(".", ","), score, "pink" if is_ng else "indigo",
+                      "dari 1,00", gap_text)
     bar.set_value_size(19)
     sb.addWidget(bar)
     right.addWidget(score_box)
     info = vbox(0)
     for k, v in (("Produk", product), ("Ambang batas", f"{threshold:.2f}".replace(".", ",")),
-                 ("Versi model", "pc-v2.1"), ("Kejadian", "REJECT oleh AI"), ("LED reject", "Menyala 2 detik")):
+                 ("Versi model", "pc-v2.1"), ("Kejadian", "REJECT oleh AI" if is_ng else "Tidak ada"),
+                 ("LED reject", "Menyala 2 detik" if is_ng else "Tidak menyala")):
         r = QFrame()
         r.setObjectName("KV")
         r.setStyleSheet(f"QFrame#KV {{ border: none; border-bottom: 1px solid {Color.BORDER}; }}")
@@ -79,9 +86,10 @@ def open_photo_viewer(window: QWidget, alert: Alert) -> Overlay:
         info.addWidget(r)
     right.addLayout(info)
     right.addStretch(1)
-    done = Button("Tutup", "outline")
-    done.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-    right.addWidget(done)
+    folder = Button("Buka folder foto batch" if show_folder else "Tutup", "outline", "md",
+                    "folder" if show_folder else None)
+    folder.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+    right.addWidget(folder)
     holder = QWidget()
     holder.setFixedWidth(380)
     holder.setLayout(right)
@@ -89,7 +97,10 @@ def open_photo_viewer(window: QWidget, alert: Alert) -> Overlay:
 
     overlay = Overlay(window, card).open()
     close.clicked.connect(overlay.close_overlay)
-    done.clicked.connect(overlay.close_overlay)
+    if show_folder:
+        folder.clicked.connect(lambda: (overlay.close_overlay(), window.open_batch("riwayat", batch)))
+    else:
+        folder.clicked.connect(overlay.close_overlay)
     return overlay
 
 

@@ -9,7 +9,7 @@ from ..theme import TONES, Color, Size, Type, font
 
 NAV_MAIN = [("dashboard", "Dashboard", "dashboard"), ("produk", "Produk", "package"),
             ("batch", "Batch", "layers"), ("alert", "Alert", "bell"), ("laporan", "Laporan", "report")]
-NAV_OTHER = [("kejadian", "Kejadian", "activity")]
+NAV_OTHER = [("kejadian", "Kejadian", "activity"), ("riwayat", "Riwayat", "folder")]
 
 
 class NavButton(QPushButton):

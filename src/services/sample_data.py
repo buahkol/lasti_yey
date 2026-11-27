@@ -4,9 +4,11 @@ Used by the services until the REST API (/api/v1) is connected. Each block
 names the endpoint that will provide it.
 """
 
-from datetime import date, datetime
+import random
+import re
+from datetime import date, datetime, timedelta
 
-from ..models import Alert, Batch, Product, ProductionEvent, User
+from ..models import Alert, Batch, Inspection, Product, ProductionEvent, User
 
 TODAY = date(2026, 11, 25)
 
@@ -166,3 +168,33 @@ EVENTS = {
         _event("09.37", "REJECT", "Skor 0,73 melewati ambang 0,62"),
     ],
 }
+
+
+def _minutes(duration: str) -> int:
+    hours = re.search(r"(\d+) jam", duration)
+    minutes = re.search(r"(\d+) menit", duration)
+    return (int(hours[1]) * 60 if hours else 0) + (int(minutes[1]) if minutes else 0)
+
+
+def inspection_history(batch_code: str) -> list[Inspection]:
+    """Every inspected can of a batch (OK and NG), newest first. Mirrors GET /batches/{code}/inspections."""
+    first_id = 1
+    for batch in sorted(BATCHES, key=lambda b: b.started_at):
+        if batch.code == batch_code:
+            break
+        first_id += batch.output
+    else:
+        return []
+    threshold = next(p.threshold for p in PRODUCTS if p.sku == batch.sku)
+    rnd = random.Random(batch_code)
+    ng = set(rnd.sample(range(batch.output), batch.ng_count))
+    step = _minutes(batch.duration) * 60 / max(batch.output, 1)
+    rows = []
+    for i in range(batch.output):
+        when = batch.started_at + timedelta(seconds=round(step * (i + 0.5)))
+        if i in ng:
+            score, result, defect = rnd.uniform(threshold + 0.01, 0.95), "NG", rnd.choice(["dent", "rust", "label"])
+        else:
+            score, result, defect = rnd.uniform(0.18, threshold - 0.06), "OK", "none"
+        rows.append(Inspection(first_id + i, batch_code, result, round(score, 2), when, defect))
+    return rows[::-1]

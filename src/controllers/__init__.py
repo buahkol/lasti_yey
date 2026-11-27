@@ -9,6 +9,7 @@ from .alert_controller import AlertController
 from .auth_controller import AuthController
 from .batch_controller import BatchController, CreateResult
 from .dashboard_controller import DashboardController
+from .history_controller import HistoryController, PhotoFolder
 from .event_controller import EventController
 from .product_controller import ProductController
 from .report_controller import ReportController
@@ -21,6 +22,7 @@ class Controllers:
     products: ProductController
     batches: BatchController
     alerts: AlertController
+    history: HistoryController
     reports: ReportController
     events: EventController
 
@@ -35,6 +37,7 @@ class Controllers:
             products=ProductController(products),
             batches=BatchController(batches, products),
             alerts=AlertController(inspections),
+            history=HistoryController(inspections, batches, products),
             reports=ReportController(reports, batches, products),
             events=EventController(EventService(), batches),
         )
@@ -42,5 +45,5 @@ class Controllers:
 
 __all__ = [
     "Controllers", "AuthController", "DashboardController", "ProductController", "BatchController",
-    "CreateResult", "AlertController", "ReportController", "EventController",
+    "CreateResult", "AlertController", "HistoryController", "PhotoFolder", "ReportController", "EventController",
 ]

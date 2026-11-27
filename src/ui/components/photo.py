@@ -173,12 +173,12 @@ class AlertRow(QFrame):
 
 
 class DefectCard(QFrame):
-    """Card for one NG can with photo, batch, time and score bar."""
+    """Card for one inspected can with photo, batch, time and score bar. result is NG (pink) or OK (indigo)."""
 
     clicked = pyqtSignal()
 
     def __init__(self, batch: str, time: str, score: float, threshold: float, defect: str = "dent",
-                 highlight: bool = False, parent: QWidget | None = None):
+                 highlight: bool = False, parent: QWidget | None = None, result: str = "NG"):
         super().__init__(parent)
         self.setObjectName("DefectCard")
         self.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -189,7 +189,7 @@ class DefectCard(QFrame):
         self.photo = CanPhoto(defect, (17, 17, 0, 0))
         self.photo.setMinimumHeight(190)
         lay.addWidget(self.photo, 1)
-        self._badge = Badge("NG", self.photo)
+        self._badge = Badge(result, self.photo)
         self._badge.move(12, 12)
         self._expand = IconButton("expand", "Lihat foto penuh", "outline", 34, parent=self.photo)
         self._expand.clicked.connect(self.clicked)
@@ -198,7 +198,7 @@ class DefectCard(QFrame):
         r1.addWidget(text(batch, Type.HEADING), 1)
         r1.addWidget(text(time, Type.CAPTION, Color.TEXT_TERTIARY))
         info.addLayout(r1)
-        bar = ProgressBar("Skor", f"{score:.2f}".replace(".", ","), score, "pink",
+        bar = ProgressBar("Skor", f"{score:.2f}".replace(".", ","), score, "pink" if result == "NG" else "indigo",
                           suffix=f"ambang {threshold:.2f}".replace(".", ","))
         info.addWidget(bar)
         lay.addLayout(info)

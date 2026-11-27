@@ -46,3 +46,17 @@ def test_alert_time_windows_grow_with_the_window():
     summary = c.alerts.summary(0)
     assert summary.count == 7 and summary.top.score == 0.93
     assert summary.batches == ["B-2411-01", "B-2411-02"]
+
+
+def test_history_folders_hold_ok_and_ng_photos():
+    c = make()
+    folders = c.history.folders()
+    assert len(folders) == len(c.batches.search())
+    assert c.history.counts("B-2411-02") == [640, 598, 42]
+    photos, pages, total = c.history.photos("B-2411-02", "NG")
+    assert total == 42 and pages == 3 and all(p.result == "NG" for p in photos)
+    ok, _, ok_total = c.history.photos("B-2411-02", "OK", page=99)
+    assert ok_total == 598 and all(p.result == "OK" and p.score < p.threshold for p in ok)
+    assert [f.batch.code for f in c.history.folders("cabai")] == [f.batch.code for f in folders
+                                                                   if "cabai" in f.batch.product]
+    assert c.history.folder(" b-2410-21 ").batch.code == "B-2410-21"
