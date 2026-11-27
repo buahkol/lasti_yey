@@ -66,7 +66,9 @@ uv run python -m ml.evaluate --manifest $M --data-root $RAW --sku $SKU
 
 ## Reproduce the model on your own machine
 
-Photos and trained models (`dataset/`, `models/`) are **not** in git. To run the pipeline
+Photos and trained models (`dataset/`, `models/`) are **not** in git, except the showcase model
+`models/PLS-Sarden/v1` (one can, one side; see `doc/model_eval/PLS-Sarden_v1/`), which the server loads
+from the default `MODEL_DIR`. To run the pipeline
 yourself you need the code, the server dependencies and a dataset folder.
 
 ```bash
