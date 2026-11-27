@@ -17,7 +17,7 @@ The serial port needs the `dialout` group on Linux (`sudo usermod -aG dialout $U
 |---|---|---|
 | ESP32-S3 N16R8 | — | 16 MB flash, 8 MB PSRAM detected; powered over USB |
 | Camera OV5640 | ribbon (pin map in `include/camera_pins.h`) | detected (`PID 0x5640`), 640×480 JPEG |
-| IR obstacle sensor OUT | GPIO 14 | works: idle LOW, HIGH while an object is in front (active HIGH, the firmware default) |
+| IR obstacle sensor OUT (two-LED module, FC-51 style) | GPIO 14 | works: HIGH with nothing in front, **LOW while it sees a can** (its LED lights); `irlevel=low`, the firmware default |
 | Red reject LED | GPIO 21 → 220 Ω → LED → GND | works (long leg towards the resistor) |
 | Onboard RGB (WS2812) | GPIO 48 | status, mirrors the reject LED |
 
@@ -29,13 +29,18 @@ our own cans (DEMO-CAN is trained on GoodsAD drink cans, so its OK/NG on our pho
 
 - The sensor gets VCC/GND from the ESP32's 5V and GND pins (5V is only live when powered over USB).
   If the sensor runs on 5 V, its OUT must still be at most 3.3 V; check with a multimeter or power it from 3V3.
-- Active-LOW sensors (FC-51 style, LED lights and OUT goes LOW on detect): set `PIN_IR_ACTIVE_LEVEL LOW`
-  in `device_config.h`. The firmware enables a pull-down (active HIGH) or pull-up (active LOW) on GPIO 14.
+- **Sensor polarity:** `set irlevel low|high` = the OUT level while the sensor sees a can (saved, no reflash).
+  Our two-LED obstacle module is `low`; the HC-SR501 PIR (dome) is `high`. Wrong polarity looks like this:
+  nothing happens when the can is put down, and the photo (of an empty spot) is taken when it is lifted.
+  `status` shows the live level, e.g. `sensor GPIO14=1 (clear) irlevel=low`. The firmware pulls GPIO 14
+  towards "no can" (pull-up for `low`, pull-down for `high`).
 - The screw (blue trimmer) on the sensor sets the **detection distance**. With nothing in front, turn it
   until the module's LED goes off, then a bit further. A can at its real position must light the LED steadily.
   Check with the darkest label, which reflects the least IR.
-- The firmware ignores the sensor for `PIN_IR_WARMUP_MS` after boot (default 60 s, needed by the old
-  HC-SR501 PIR). The IR sensor needs no warm-up: set `#define PIN_IR_WARMUP_MS 1000` in `device_config.h`.
+- The firmware ignores the sensor for `PIN_IR_WARMUP_MS` after boot (default 1 s). The old HC-SR501 PIR
+  needed 60 s (`#define PIN_IR_WARMUP_MS 60000` in `device_config.h`).
+- `settle` (ms, default 200) is the wait between the sensor seeing a can and the photo, so a can that is
+  still moving is not blurred. Leave the can in place until the LED reacts.
 - The HC-SR501 PIR is **not suitable**: in testing its output stayed HIGH ~95% of the time (even covered)
   and it reacts to body heat, not cans.
 
@@ -117,10 +122,10 @@ Tune exposure **before** capturing: the model must see the same lighting in trai
 - `pir` in the serial console toggles a raw log of the sensor pin: every change with a timestamp and how
   long the previous level lasted (also during warm-up). Use it to check the sensor without a server:
   ```
-  [pir]    62.55s GPIO14=1  (was 0 for 9.86s)
-  [pir]    71.79s GPIO14=0  (was 1 for 9.23s)
+  [pir]    62.55s GPIO14=0 detect  (was 1 for 9.86s)
+  [pir]    71.79s GPIO14=1 clear   (was 0 for 9.23s)
   ```
-  Expected: steady LOW with nothing in front, one HIGH pulse per can.
+  Expected: `clear` with nothing in front, one `detect` per can, and the `[insp]` line right after `detect`.
 - `snap` runs one inspection without the sensor (tests camera + network + server).
 - LED does not light: check the LED direction (long leg to the resistor), that the LED and the GND wire
   sit on the same half of the breadboard rail (MB102 rails are split in the middle), and bypass GPIO 21 by

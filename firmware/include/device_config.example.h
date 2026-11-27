@@ -15,7 +15,7 @@
 
 // Hardware
 #define PIN_IR_SENSOR       14   // IR obstacle sensor OUT
-#define PIN_IR_ACTIVE_LEVEL HIGH  // our IR sensor: HIGH on detect; FC-51 style modules: LOW
+#define PIN_IR_ACTIVE_LEVEL LOW   // default for `irlevel`: our two-LED IR module pulls OUT LOW on detect; PIR: HIGH
 #define PIN_IR_WARMUP_MS    1000  // IR sensor needs none; the old HC-SR501 PIR needed 60000
 #define PIN_REJECT_LED      21   // external red LED + 220 ohm to GND, active HIGH
 #define PIN_RGB_LED         48   // onboard WS2812, mirrors the reject LED; -1 to disable

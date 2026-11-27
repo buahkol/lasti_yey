@@ -7,6 +7,7 @@
 // Settings live in NVS. Change them over serial ("help") or the web page http://<ip>/.
 // With no Wi-Fi configured the board opens an access point "SiMonPro-Setup" (page at 192.168.4.1).
 
+#include <esp_timer.h>
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include <ESPmDNS.h>
@@ -26,16 +27,17 @@
 #include "device_config.example.h"
 #endif
 
-// HC-SR501 PIR modules assert HIGH; set to LOW for active-LOW sensors such as FC-51.
+// Default level of the sensor OUT pin while it sees a can. Our IR obstacle module (its LED lights on
+// detect) pulls OUT LOW; HC-SR501 PIR modules drive HIGH. Changeable at runtime: `set irlevel low|high`.
 #ifndef PIN_IR_ACTIVE_LEVEL
-#define PIN_IR_ACTIVE_LEVEL HIGH
+#define PIN_IR_ACTIVE_LEVEL LOW
 #endif
 
 // ---------------------------------------------------------------- constants
 static const uint32_t CONFIRM_MS = 30;       // sensor must stay active this long (debounce)
 static const uint32_t RELEASE_MS = 50;       // ... and inactive this long before the next can
 #ifndef PIN_IR_WARMUP_MS
-#define PIN_IR_WARMUP_MS 60000               // HC-SR501 calibration after power-on
+#define PIN_IR_WARMUP_MS 1000                // IR module: 1 s. The HC-SR501 PIR needed 60000
 #endif
 static const uint32_t LOCKOUT_MS = 500;      // min gap between two cans (FR-07)
 static const uint32_t REJECT_LED_MS = 2000;  // FR-14
@@ -54,6 +56,8 @@ struct Config {
   String ssid, pass, server, key, batch, sku, label, canId;
   uint8_t mode;
   int aec, agc, settleMs;
+  int irLevel;  // 0 = sensor OUT is LOW while it sees a can, 1 = HIGH
+  int rgbOn;    // onboard RGB status LED; off keeps its light out of the photo
 } cfg;
 
 Preferences prefs;
@@ -80,6 +84,8 @@ void loadConfig() {
   cfg.aec = prefs.getInt("aec", DEFAULT_AEC_VALUE);
   cfg.agc = prefs.getInt("agc", DEFAULT_AGC_GAIN);
   cfg.settleMs = prefs.getInt("settle", 200);
+  cfg.irLevel = prefs.getInt("irlevel", PIN_IR_ACTIVE_LEVEL == HIGH ? 1 : 0);
+  cfg.rgbOn = prefs.getInt("rgb", 1);
   pending = prefs.getUInt("pending", 0);
   prefs.end();
   while (cfg.server.endsWith("/")) cfg.server.remove(cfg.server.length() - 1);
@@ -99,6 +105,8 @@ void saveConfig() {
   prefs.putInt("aec", cfg.aec);
   prefs.putInt("agc", cfg.agc);
   prefs.putInt("settle", cfg.settleMs);
+  prefs.putInt("irlevel", cfg.irLevel);
+  prefs.putInt("rgb", cfg.rgbOn);
   prefs.end();
 }
 
@@ -121,6 +129,7 @@ void ledShow(LedMode m, uint32_t ms) {
 }
 
 void rgb(uint32_t c) {
+  if (!cfg.rgbOn) c = 0;  // `set rgb off`: dark whatever the status
   if (PIN_RGB_LED < 0 || c == lastRgb) return;
   lastRgb = c;
   neopixelWrite(PIN_RGB_LED, (c >> 16) & 0xFF, (c >> 8) & 0xFF, c & 0xFF);
@@ -223,10 +232,39 @@ bool initCamera() {
   return true;
 }
 
+// The board has no camera RESET/PWDN line, so after a software reboot the OV5640 is still running and
+// the first init can fail. Retry a few times; the driver resets the sensor over SCCB on each init.
+bool startCamera() {
+  for (int attempt = 1; attempt <= 3; attempt++) {
+    if (initCamera()) return true;
+    esp_camera_deinit();
+    Serial.printf("[cam] retry %d/3\n", attempt);
+    delay(500);
+  }
+  Serial.println("[cam] giving up: unplug and replug USB to power-cycle the camera, then check the ribbon");
+  return false;
+}
+
+// A frame whose readout started after this call. The driver keeps finished frames in its buffer, so
+// the first one or two can be from before the can arrived (or from after the previous can left).
+// fb->timestamp is the time since boot at the frame's first DMA buffer.
+extern bool pirDebug;
 camera_fb_t *grabFresh() {
-  camera_fb_t *fb = esp_camera_fb_get();  // discard the stale frame (taken before the can arrived)
-  if (fb) esp_camera_fb_return(fb);
-  return esp_camera_fb_get();
+  const int64_t t0 = esp_timer_get_time();
+  camera_fb_t *fb = nullptr;
+  int stale = 0;
+  for (int i = 0; i < 5; i++) {
+    fb = esp_camera_fb_get();
+    if (!fb) return nullptr;
+    int64_t ts = (int64_t)fb->timestamp.tv_sec * 1000000LL + fb->timestamp.tv_usec;
+    if (ts >= t0) break;
+    if (i == 4) break;  // give up waiting; use the newest we have
+    esp_camera_fb_return(fb);
+    stale++;
+  }
+  if (pirDebug || stale > 1) Serial.printf("[cam] skipped %d stale frame(s), frame %lld ms after request\n", stale,
+                                           ((int64_t)fb->timestamp.tv_sec * 1000000LL + fb->timestamp.tv_usec - t0) / 1000);
+  return fb;
 }
 
 // ---------------------------------------------------------------- HTTP (DV-06, DV-07)
@@ -394,6 +432,11 @@ IrState irState = IR_WAIT_RELEASE;  // require an inactive baseline after PIR wa
 uint32_t irSince = 0, lastCanMs = 0;
 uint32_t irReadyMs = 0;
 
+// Pull the pin towards "no can": some modules only drive the detect level and float otherwise.
+void applyIrPin() {
+  pinMode(PIN_IR_SENSOR, cfg.irLevel ? INPUT_PULLDOWN : INPUT_PULLUP);
+}
+
 bool pirDebug = false;  // `pir` console command: log raw GPIO level changes
 
 void pirDebugTick(uint32_t now) {
@@ -402,7 +445,8 @@ void pirDebugTick(uint32_t now) {
   int v = digitalRead(PIN_IR_SENSOR);
   if (v == last) return;
   if (pirDebug) {
-    Serial.printf("[pir] %8.2fs GPIO%d=%d", now / 1000.0, PIN_IR_SENSOR, v);
+    Serial.printf("[pir] %8.2fs GPIO%d=%d %-6s", now / 1000.0, PIN_IR_SENSOR, v,
+                  v == (cfg.irLevel ? HIGH : LOW) ? "detect" : "clear");
     if (last >= 0) Serial.printf("  (was %d for %.2fs)", last, (now - since) / 1000.0);
     if ((int32_t)(now - irReadyMs) < 0) Serial.print("  [warm-up]");
     Serial.println();
@@ -415,7 +459,7 @@ void irTick() {
   uint32_t now = millis();
   pirDebugTick(now);
   if ((int32_t)(now - irReadyMs) < 0) return;  // ignore PIR output during power-on calibration
-  bool active = digitalRead(PIN_IR_SENSOR) == PIN_IR_ACTIVE_LEVEL;
+  bool active = digitalRead(PIN_IR_SENSOR) == (cfg.irLevel ? HIGH : LOW);
   switch (irState) {
     case IR_IDLE:
       if (active) { irState = IR_CONFIRM; irSince = now; }
@@ -500,6 +544,22 @@ String setKey(String k, const String &v) {
   else if (k == "aec") { cfg.aec = constrain(v.toInt(), 0, 1200); applySensorSettings(); }
   else if (k == "agc") { cfg.agc = constrain(v.toInt(), 0, 30); applySensorSettings(); }
   else if (k == "settle") cfg.settleMs = constrain(v.toInt(), 0, 3000);
+  else if (k == "irlevel") {
+    String lv = v;
+    lv.toLowerCase();
+    if (lv == "low" || lv == "0") cfg.irLevel = 0;
+    else if (lv == "high" || lv == "1") cfg.irLevel = 1;
+    else return "irlevel must be low or high";
+    applyIrPin();
+    irState = IR_WAIT_RELEASE;  // wait for "no can" under the new meaning before counting
+  }
+  else if (k == "rgb") {
+    String lv = v;
+    lv.toLowerCase();
+    if (lv == "on" || lv == "1") cfg.rgbOn = 1;
+    else if (lv == "off" || lv == "0") cfg.rgbOn = 0;
+    else return "rgb must be on or off";
+  }
   else return "unknown key " + k;
   saveConfig();
   return "";
@@ -522,6 +582,9 @@ void printStatus(Print &out) {
   out.printf("wifi=%s ip=%s server=%s time=%s\n", cfg.ssid.c_str(),
              apMode ? WiFi.softAPIP().toString().c_str() : WiFi.localIP().toString().c_str(), cfg.server.c_str(),
              timeValid() ? isoNow().c_str() : "not synced");
+  out.printf("sensor GPIO%d=%d (%s) irlevel=%s rgb=%s\n", PIN_IR_SENSOR, digitalRead(PIN_IR_SENSOR),
+             digitalRead(PIN_IR_SENSOR) == (cfg.irLevel ? HIGH : LOW) ? "detect" : "clear", cfg.irLevel ? "high" : "low",
+             cfg.rgbOn ? "on" : "off");
   out.printf("camera=%s aec=%d agc=%d settle=%dms | capture: sku=%s label=%s can=%s | psram free %u\n",
              cameraOk ? "ok" : "FAIL", cfg.aec, cfg.agc, cfg.settleMs, cfg.sku.c_str(), cfg.label.c_str(),
              cfg.canId.c_str(), ESP.getFreePsram());
@@ -540,8 +603,9 @@ void handleCommand(String line) {
   if (cmd == "help") {
     Serial.println(
         "status | snap (= one can, without the sensor) | flush | next (can id +1) | wifi | reboot\n"
-        "pir (toggle raw sensor GPIO log)\n"
+        "pir (toggle raw sensor GPIO log) | camera (restart camera, re-lock white balance on the current scene)\n"
         "set <key> <value>  keys: ssid pass server key batch mode(inspect|capture) sku label(ok|ng) can aec agc settle\n"
+        "                   irlevel(low|high: sensor OUT level while it sees a can) rgb(on|off: onboard LED)\n"
         "mode inspect|capture | batch <code> | label ok|ng | can <id>");
   } else if (cmd == "status") printStatus(Serial);
   else if (cmd == "snap") onCan();
@@ -549,6 +613,12 @@ void handleCommand(String line) {
   else if (cmd == "next") { nextCan(); Serial.printf("can=%s\n", cfg.canId.c_str()); }
   else if (cmd == "wifi") startWifi();
   else if (cmd == "reboot") ESP.restart();
+  else if (cmd == "camera") {  // restart only the camera: white balance re-locks on what it sees now
+    Serial.println("[cam] restarting; keep the scene still for ~2 s (white balance locks on it)");
+    esp_camera_deinit();
+    cameraOk = startCamera();
+    Serial.printf("[cam] %s\n", cameraOk ? "ready" : "FAIL");
+  }
   else if (cmd == "pir") { pirDebug = !pirDebug; Serial.printf("pir log %s\n", pirDebug ? "on" : "off"); }
   else if (cmd == "set" || cmd == "mode" || cmd == "batch" || cmd == "label" || cmd == "can") {
     String k = cmd, v = rest;
@@ -617,6 +687,8 @@ void handleRoot() {
   s += inputRow("Exposure (aec 0..1200)", "aec", String(cfg.aec), "number");
   s += inputRow("Gain (agc 0..30)", "agc", String(cfg.agc), "number");
   s += inputRow("Jeda sebelum foto (ms)", "settle", String(cfg.settleMs), "number");
+  s += inputRow("Level sensor saat ada kaleng (low/high)", "irlevel", cfg.irLevel ? "high" : "low", "text");
+  s += inputRow("LED RGB di board (on/off)", "rgb", cfg.rgbOn ? "on" : "off", "text");
   s += inputRow("Server URL", "server", cfg.server);
   s += inputRow("Device key", "key", cfg.key, "password");
   s += inputRow("Wi-Fi SSID", "ssid", cfg.ssid);
@@ -636,7 +708,7 @@ void redirect(const String &msg) {
 }
 
 void handleSave() {
-  const char *keys[] = {"batch", "mode", "sku", "label", "can", "aec", "agc", "settle", "server", "key", "ssid", "pass"};
+  const char *keys[] = {"batch", "mode", "sku", "label", "can", "aec", "agc", "settle", "irlevel", "rgb", "server", "key", "ssid", "pass"};
   String errs;
   String oldSsid = cfg.ssid, oldPass = cfg.pass;
   for (const char *k : keys) {
@@ -679,16 +751,16 @@ void setup() {
   while (!Serial && millis() - t0 < 1500) delay(10);
   Serial.println("\n[boot] SiMonPro firmware");
 
-  pinMode(PIN_IR_SENSOR, PIN_IR_ACTIVE_LEVEL == HIGH ? INPUT_PULLDOWN : INPUT_PULLUP);  // some sensors only drive the active level; idle would float
-  irReadyMs = millis() + PIN_IR_WARMUP_MS;
-  Serial.printf("[sensor] warming up for %u s; waiting for inactive baseline\n", PIN_IR_WARMUP_MS / 1000);
   pinMode(PIN_REJECT_LED, OUTPUT);
   digitalWrite(PIN_REJECT_LED, LOW);
   rgb(0);
 
   loadConfig();
+  applyIrPin();  // after loadConfig: the pull direction follows the saved irlevel
+  irReadyMs = millis() + PIN_IR_WARMUP_MS;
+  Serial.printf("[sensor] warming up for %u s; waiting for \"no can\" first\n", PIN_IR_WARMUP_MS / 1000);
   Serial.printf("[boot] PSRAM %u KB, flash %u MB\n", ESP.getPsramSize() / 1024, ESP.getFlashChipSize() >> 20);
-  cameraOk = initCamera();
+  cameraOk = startCamera();
   startWifi();
   setupWeb();
   printStatus(Serial);
