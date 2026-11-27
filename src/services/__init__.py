@@ -1,10 +1,15 @@
-from .AuthService import AuthService
-from .DashboardService import DashboardService
-from .DefectService import DefectService
-from .KategoriService import KategoriService
-from .LaporanService import LaporanService
-from .PencapaianService import PencapaianService
-from .ProdukService import ProdukService
-from .ProduksiService import ProduksiService
-from .TargetService import TargetService
-from .UserDataLocal import UserDataLocal
+"""Data access for the desktop app.
+
+The services read the sample data in sample_data.py for now. When the REST
+API is ready, replace the body of each method with a call to the API client;
+controllers and views do not need to change.
+"""
+
+from .auth_service import AuthService
+from .batch_service import BatchService
+from .event_service import EventService
+from .inspection_service import InspectionService
+from .product_service import ProductService
+from .report_service import ReportService
+
+__all__ = ["AuthService", "BatchService", "EventService", "InspectionService", "ProductService", "ReportService"]

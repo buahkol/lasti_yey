@@ -56,9 +56,9 @@ local_*
 !.env.example
 
 # SiMonPro runtime data (models, datasets, inspection images)
-models/*
+/models/*
 # showcase model, committed on purpose (5.8 MB)
-!models/PLS-Sarden/
+!/models/PLS-Sarden/
 dataset/
 storage/
 doc/model_eval/*/scores.csv
