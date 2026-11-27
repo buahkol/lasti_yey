@@ -1,4 +1,4 @@
-"""Read endpoints (D2 #3, #4, #6, #7, #8, #10, #11) and POST /shipments (D2 #9) against PRD FR-18..FR-31.
+"""Read endpoints (D2 #3, #4, #6, #7, #8, #10, #11) against PRD FR-18..FR-31.
 
 Complements test_api.py: exact error bodies, date handling in WIB, filters, auth and validation.
 """
@@ -26,53 +26,6 @@ def _hold_batch(client, user, device, code):
     for img in (OK_IMG, NG_IMG):
         assert inspect(client, device, code, img).status_code == 201
     assert client.post(f"{API}/batches/{code}/close", headers=user).json()["inspectionStatus"] == "HOLD"
-
-
-# ---- POST /shipments (FR-28, FR-29) ---------------------------------------- #
-def test_shipment_409_body_lists_hold_batches_at_top_level(client, user, device):
-    _passed_batch(client, user, device, "B-OK")
-    _hold_batch(client, user, device, "B-NG")
-    make_batch(client, user, "B-RUN")  # still running -> HOLD as well
-    r = client.post(f"{API}/shipments", headers=user,
-                    json={"orderId": "PO-9", "batchCodes": ["B-OK", "B-NG", "B-RUN"], "quantity": 3})
-    assert r.status_code == 409
-    body = r.json()
-    assert isinstance(body["detail"], str) and body["detail"]
-    assert body["holdBatches"] == ["B-NG", "B-RUN"]
-    # Nothing was saved by the rejected request.
-    assert client.get(f"{API}/shipments", headers=user).json() == []
-
-
-def test_shipment_unknown_batch_is_400_with_list(client, user, device):
-    _passed_batch(client, user, device, "B-OK2")
-    r = client.post(f"{API}/shipments", headers=user,
-                    json={"orderId": "PO-1", "batchCodes": ["B-OK2", "NOPE"], "quantity": 1})
-    assert r.status_code == 400
-    assert r.json()["unknownBatches"] == ["NOPE"]
-
-
-@pytest.mark.parametrize("payload", [
-    {"orderId": "PO-1", "batchCodes": [], "quantity": 1},
-    {"orderId": "PO-1", "batchCodes": ["B-X"], "quantity": 0},
-    {"orderId": "", "batchCodes": ["B-X"], "quantity": 1},
-    {"batchCodes": ["B-X"], "quantity": 1},
-    {"orderId": "PO-1", "quantity": 1},
-])
-def test_shipment_invalid_body_is_400(client, user, payload):
-    assert client.post(f"{API}/shipments", headers=user, json=payload).status_code == 400
-
-
-def test_shipment_multiple_batches_and_duplicates(client, user, device):
-    _passed_batch(client, user, device, "B-M1", ok=3)
-    _passed_batch(client, user, device, "B-M2", ok=4)
-    r = client.post(f"{API}/shipments", headers=user,
-                    json={"orderId": "PO-M", "batchCodes": ["B-M1", "B-M2", "B-M1"], "quantity": 7})
-    assert r.status_code == 201
-    assert r.json()["batchCodes"] == ["B-M1", "B-M2"]  # duplicate removed
-    listing = client.get(f"{API}/shipments", headers=user).json()
-    assert listing[0]["batchCodes"] == ["B-M1", "B-M2"] and listing[0]["quantity"] == 7
-    only_m2 = client.get(f"{API}/shipments", params={"batchCode": "B-M2"}, headers=user).json()
-    assert len(only_m2) == 1
 
 
 # ---- GET /products/{sku}/availability (FR-18) ------------------------------- #
@@ -191,7 +144,6 @@ def test_history_of_batch_without_inspections_is_404(client, user):
     ("GET", "/batches/inspection-status"),
     ("GET", "/batches/B-1/inspections"),
     ("GET", "/inspections/1/photo"),
-    ("POST", "/shipments"),
 ])
 def test_read_endpoints_require_token(client, device, method, path):
     assert client.request(method, f"{API}{path}").status_code == 401

@@ -54,7 +54,7 @@ def update_product(sku: str, body: ProductUpdate, conn: PgConnection = Depends(g
 @router.get("/{sku}/availability", response_model=AvailabilityOut)
 def availability(sku: str, date_: date | None = Query(default=None, alias="date"),
                  conn: PgConnection = Depends(get_conn)):
-    """Cans that passed inspection for this product on the date (shipments not subtracted)."""
+    """Cans that passed inspection for this product on the date."""
     day = date_ or today_local(conn)
     with conn.cursor() as cur:
         cur.execute("SELECT 1 FROM produk WHERE sku = %s", (sku,))

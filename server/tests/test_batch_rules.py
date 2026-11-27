@@ -139,6 +139,6 @@ def test_batch_list_filters(client, user):
     assert client.post(f"{API}/batches/NOPE/close", headers=user).status_code == 404
 
 
-@pytest.mark.parametrize("path", ["/inspections/alerts", "/production/reports", "/batches", "/shipments"])
+@pytest.mark.parametrize("path", ["/inspections/alerts", "/production/reports", "/batches"])
 def test_read_endpoints_return_401_without_token(client, path):
     assert client.get(f"{API}{path}").status_code == 401

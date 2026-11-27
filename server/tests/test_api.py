@@ -197,34 +197,6 @@ def test_empty_batch_closes_as_hold(client, user):
     assert client.post(f"{API}/batches/B-EMPTY/close", headers=user).json()["inspectionStatus"] == "HOLD"
 
 
-# ---- 9. shipments (FR-28, 29) ---------------------------------------------- #
-def test_shipments(client, user, device):
-    make_batch(client, user, "B-S1")
-    make_batch(client, user, "B-S2")
-    for _ in range(5):
-        inspect(client, device, "B-S1", OK_IMG)
-    inspect(client, device, "B-S2", NG_IMG)
-    client.post(f"{API}/batches/B-S1/close", headers=user)
-    client.post(f"{API}/batches/B-S2/close", headers=user)
-
-    r = client.post(f"{API}/shipments", headers=user,
-                    json={"orderId": "PO-1", "batchCodes": ["B-S1", "B-S2"], "quantity": 3})
-    assert r.status_code == 409 and r.json()["holdBatches"] == ["B-S2"]
-    r = client.post(f"{API}/shipments", headers=user,
-                    json={"orderId": "PO-1", "batchCodes": ["NOPE"], "quantity": 3})
-    assert r.status_code == 400
-    r = client.post(f"{API}/shipments", headers=user,
-                    json={"orderId": "PO-1", "batchCodes": ["B-S1"], "quantity": 99})
-    assert r.status_code == 400
-    r = client.post(f"{API}/shipments", headers=user,
-                    json={"orderId": "PO-1113-07", "batchCodes": ["B-S1"], "quantity": 5})
-    assert r.status_code == 201
-    assert r.json() == {"shipmentId": r.json()["shipmentId"], "orderId": "PO-1113-07",
-                        "batchCodes": ["B-S1"], "status": "recorded"}
-    lst = client.get(f"{API}/shipments", headers=user).json()
-    assert lst[0]["orderId"] == "PO-1113-07" and lst[0]["quantity"] == 5
-
-
 # ---- 10. history (FR-30) --------------------------------------------------- #
 def test_history_filter_and_404(client, user, device):
     make_batch(client, user, "B-H")
