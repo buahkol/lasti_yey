@@ -4,7 +4,8 @@ import sys
 os.environ['QT_API'] = 'pyqt6'
 
 import qtawesome as qta
-from PyQt6.QtCore import QEasingCurve, QPoint, QPropertyAnimation, Qt, QTimer
+from PyQt6.QtCore import (QEasingCurve, QEvent, QPoint, QPropertyAnimation, Qt,
+                          QTimer)
 from PyQt6.QtGui import QBrush, QColor, QFont, QPainter, QPainterPath
 from PyQt6.QtWidgets import (QApplication, QGraphicsDropShadowEffect,
                              QGraphicsOpacityEffect, QHBoxLayout, QLabel,
@@ -39,6 +40,19 @@ class SuccessPopup(QWidget):
         self._init_timer()
         self._init_animation()
         self.hide()
+
+        # Follow the parent's size: when shown right after showMaximized(),
+        # the parent has not been resized yet (on Windows the maximize is
+        # applied asynchronously), so a one-shot position ends up in the
+        # wrong place, e.g. the middle-left of the screen.
+        if parent is not None:
+            parent.installEventFilter(self)
+
+    def eventFilter(self, obj, event):
+        if obj is self.parent() and event.type() in (QEvent.Type.Resize, QEvent.Type.Show):
+            if self.isVisible():
+                self._reposition()
+        return super().eventFilter(obj, event)
 
     # Build UI 
     def _init_ui(self):
@@ -115,6 +129,11 @@ class SuccessPopup(QWidget):
         self._anim = QPropertyAnimation(self._opacity_effect, b"opacity")
         self._anim.setDuration(300)
         self._anim.setEasingCurve(QEasingCurve.Type.InOutQuad)
+        self._anim.finished.connect(self._on_anim_finished)
+
+    def _on_anim_finished(self):
+        if self._anim.endValue() == 0.0:
+            self.hide()
 
     def _init_timer(self):
         self._timer = QTimer(self)
@@ -168,10 +187,10 @@ class SuccessPopup(QWidget):
             
         self.update()
         self._opacity_effect.setOpacity(0.0)
+        # Position before showing so it never paints a frame at (0, 0).
+        self._reposition()
         self.show()
         self.raise_()
-
-        QTimer.singleShot(0, self._reposition)
 
         self._anim.stop()
         self._anim.setStartValue(self._opacity_effect.opacity())
@@ -186,7 +205,6 @@ class SuccessPopup(QWidget):
         self._anim.stop()
         self._anim.setStartValue(self._opacity_effect.opacity())
         self._anim.setEndValue(0.0)
-        self._anim.finished.connect(self.hide)
         self._anim.start()
 
     # Positioning 
