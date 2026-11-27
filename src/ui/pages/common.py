@@ -5,6 +5,7 @@ from datetime import date, timedelta
 
 from PyQt6.QtWidgets import QFileDialog, QFrame, QLabel, QSizePolicy, QWidget
 
+from .. import formatting as fmt
 from ..assets import pixmap
 from ..components import (
     Badge, Button, CanPhoto, Checkbox, IconButton, InputField, ModalCard, Option, Overlay, ProgressBar, RadioOption,
@@ -70,16 +71,17 @@ def open_photo_viewer(window: QWidget, alert: Alert, show_folder: bool = True) -
     )
     sb = vbox(0, (16, 14, 16, 14), score_box)
     gap = score - threshold
-    gap_text = (f"Melewati ambang {threshold:.2f} sebesar {gap:.2f}" if is_ng
-                else f"Di bawah ambang {threshold:.2f} sebesar {-gap:.2f}").replace(".", ",")
+    thr = fmt.threshold(threshold)
+    gap_text = (f"Melewati ambang {thr} sebesar {fmt.threshold(gap)}" if is_ng
+                else f"Di bawah ambang {thr} sebesar {fmt.threshold(-gap)}")
     bar = ProgressBar("Skor anomali", f"{score:.2f}".replace(".", ","), score, "pink" if is_ng else "indigo",
                       "dari 1,00", gap_text)
     bar.set_value_size(19)
     sb.addWidget(bar)
     right.addWidget(score_box)
     info = vbox(0)
-    for k, v in (("Produk", product), ("Ambang batas", f"{threshold:.2f}".replace(".", ",")),
-                 ("Versi model", "pc-v2.1"), ("Kejadian", "REJECT oleh AI" if is_ng else "Tidak ada"),
+    for k, v in (("Produk", product), ("Ambang batas", thr),
+                 ("Versi model", alert.model_version or "-"), ("Kejadian", "REJECT oleh AI" if is_ng else "Tidak ada"),
                  ("LED reject", "Menyala 2 detik" if is_ng else "Tidak menyala")):
         r = QFrame()
         r.setObjectName("KV")

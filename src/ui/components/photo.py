@@ -14,6 +14,7 @@ from PyQt6.QtGui import (
 )
 from PyQt6.QtWidgets import QFrame, QSizePolicy, QWidget
 
+from .. import formatting as fmt
 from ..theme import TONES, Color, Type
 from .base import add_shadow, hbox, text, vbox
 from .buttons import IconButton
@@ -242,7 +243,7 @@ class DefectCard(QFrame):
         r1.addWidget(text(time, Type.CAPTION, Color.TEXT_TERTIARY))
         info.addLayout(r1)
         bar = ProgressBar("Skor", f"{score:.2f}".replace(".", ","), score, "pink" if result == "NG" else "indigo",
-                          suffix=f"ambang {threshold:.2f}".replace(".", ","))
+                          suffix=f"ambang {fmt.threshold(threshold)}")
         info.addWidget(bar)
         lay.addLayout(info)
 

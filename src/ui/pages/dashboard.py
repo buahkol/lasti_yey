@@ -184,6 +184,11 @@ class DashboardPage(Page):
     def on_show(self) -> None:
         self._seconds = 5  # refresh on the next tick
 
+    def refresh(self) -> None:
+        self._build()
+        self._seconds = 0
+        self.live.set_text("Diperbarui baru saja")
+
     def _search(self) -> None:
         query = self.search.edit.text().strip()
         if query:

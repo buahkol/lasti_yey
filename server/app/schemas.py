@@ -181,6 +181,10 @@ class AlertOut(ApiModel):
     anomaly_score: float
     image_url: str
     timestamp: datetime
+    # Additive: the threshold and model this inspection was judged with (the product's may change later)
+    threshold: float | None = None
+    model_version: str | None = None
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True, protected_namespaces=())
 
 
 # ---- 7. GET /inspections/reports/{batchCode} ------------------------------- #
@@ -217,6 +221,10 @@ class InspectionRow(ApiModel):
     result: Result
     anomaly_score: float
     timestamp: datetime
+    # Additive: the threshold and model this inspection was judged with
+    threshold: float | None = None
+    model_version: str | None = None
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True, protected_namespaces=())
 
 
 class InspectionHistory(ApiModel):

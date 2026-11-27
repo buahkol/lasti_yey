@@ -4,7 +4,7 @@ from PyQt6.QtCore import QPointF, Qt, pyqtSignal
 from PyQt6.QtGui import QColor, QPainter, QRadialGradient
 from PyQt6.QtWidgets import QFrame, QScrollArea, QStackedWidget, QWidget
 
-from ..components import AdaptiveRow, hbox, text, vbox
+from ..components import AdaptiveRow, IconButton, hbox, text, vbox
 from ..theme import Color, Type
 from .sidebar import Sidebar
 
@@ -54,11 +54,19 @@ class Page(QWidget):
         header.add(self.title, 1, align=Qt.AlignmentFlag.AlignVCenter)
         actions = QWidget()
         self.actions = hbox(12, (0, 0, 0, 0), actions)
+        # Reload this page from the server (new inspections arrive while the page is open)
+        self.refresh_button = IconButton("refresh", "Muat ulang data", "outline")
+        self.refresh_button.clicked.connect(self.refresh)
+        self.actions.addWidget(self.refresh_button)
         header.add(actions, 0, align=Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         self.body.addWidget(header)
 
     def on_show(self) -> None:
         """Hook called when the page becomes visible (refresh timers, etc.)."""
+
+    def refresh(self) -> None:
+        """Refresh button: reload the data shown. Pages that load in on_show get this for free."""
+        self.on_show()
 
 
 class AppWindow(QWidget):

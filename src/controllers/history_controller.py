@@ -44,8 +44,11 @@ class HistoryController:
 
     def as_photo(self, batch: Batch, row: Inspection) -> Alert:
         """The photo viewer and cards read Alert objects; this adds threshold, product and result."""
-        return Alert(row.batch, f"{row.timestamp:%H.%M.%S}", row.score, self._threshold(batch),
-                     row.defect if row.is_ng else "none", batch.product, row.timestamp, row.result, row.inspection_id)
+        product = self._products.find(batch.sku)
+        threshold = row.threshold if row.threshold is not None else self._threshold(batch)
+        return Alert(row.batch, f"{row.timestamp:%H.%M.%S}", row.score, threshold,
+                     row.defect if row.is_ng else "none", batch.product, row.timestamp, row.result, row.inspection_id,
+                     row.model_version or (product.model_version if product else ""))
 
     def folders(self, query: str = "") -> list[PhotoFolder]:
         """Folders newest first. query matches the batch code, SKU or product name."""

@@ -145,7 +145,9 @@ def test_alerts_since_and_photo(client, user, device):
     alerts = client.get(f"{API}/inspections/alerts", headers=user).json()
     assert len(alerts) == 1
     a = alerts[0]
-    assert set(a) == {"inspectionId", "batchCode", "anomalyScore", "imageUrl", "timestamp"}
+    assert set(a) == {"inspectionId", "batchCode", "anomalyScore", "imageUrl", "timestamp", "threshold",
+                      "modelVersion"}
+    assert a["threshold"] == 0.5 and a["modelVersion"]  # what this can was judged with (stub model)
     assert a["imageUrl"] == f"/api/v1/inspections/{first['inspectionId']}/photo"
     newer = client.get(f"{API}/inspections/alerts", params={"since": a["timestamp"]}, headers=user).json()
     assert newer == []
@@ -208,7 +210,9 @@ def test_history_filter_and_404(client, user, device):
     inspect(client, device, "B-H", NG_IMG)
     r = client.get(f"{API}/batches/B-H/inspections", headers=user).json()
     assert (r["batchCode"], r["total"], r["ng"], len(r["inspections"])) == ("B-H", 2, 1, 2)
-    assert set(r["inspections"][0]) == {"inspectionId", "result", "anomalyScore", "timestamp"}
+    assert set(r["inspections"][0]) == {"inspectionId", "result", "anomalyScore", "timestamp", "threshold",
+                                        "modelVersion"}
+    assert r["inspections"][0]["threshold"] == 0.5
     ng = client.get(f"{API}/batches/B-H/inspections", params={"result": "NG"}, headers=user).json()
     assert [i["result"] for i in ng["inspections"]] == ["NG"]
     assert client.get(f"{API}/batches/NOPE/inspections", headers=user).status_code == 404

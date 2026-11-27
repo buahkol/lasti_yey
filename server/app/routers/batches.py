@@ -110,7 +110,7 @@ def history(batch_code: str, result: Result | None = None, conn: PgConnection = 
     total, _, ng = inspection_counts(conn, batch_code)
     if total == 0:
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"Data inspeksi batch {batch_code} tidak tersedia")
-    sql = "SELECT id, hasil, skor_anomali, waktu FROM inspeksi WHERE kode_batch = %s"
+    sql = "SELECT id, hasil, skor_anomali, waktu, ambang_batas, versi_model FROM inspeksi WHERE kode_batch = %s"
     params: list = [batch_code]
     if result:
         sql += " AND hasil = %s"
@@ -120,5 +120,6 @@ def history(batch_code: str, result: Result | None = None, conn: PgConnection = 
         rows = cur.fetchall()
     return InspectionHistory(batch_code=batch_code, total=total, ng=ng, inspections=[
         InspectionRow(inspection_id=r["id"], result=r["hasil"], anomaly_score=round(r["skor_anomali"], 4),
-                      timestamp=r["waktu"]) for r in rows
+                      timestamp=r["waktu"], threshold=r["ambang_batas"], model_version=r["versi_model"])
+        for r in rows
     ])

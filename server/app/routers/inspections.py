@@ -93,13 +93,14 @@ def alerts(since: datetime | None = None, batch_code: str | None = Query(default
         where.append("kode_batch = %s")
         params.append(batch_code)
     with conn.cursor() as cur:
-        cur.execute(f"""SELECT id, kode_batch, skor_anomali, waktu FROM inspeksi
+        cur.execute(f"""SELECT id, kode_batch, skor_anomali, waktu, ambang_batas, versi_model FROM inspeksi
                         WHERE {' AND '.join(where)} ORDER BY waktu DESC, id DESC LIMIT %s""",
                     [*params, limit])
         rows = cur.fetchall()
     return [AlertOut(inspection_id=r["id"], batch_code=r["kode_batch"],
                      anomaly_score=round(r["skor_anomali"], 4),
-                     image_url=f"{API_PREFIX}/inspections/{r['id']}/photo", timestamp=r["waktu"])
+                     image_url=f"{API_PREFIX}/inspections/{r['id']}/photo", timestamp=r["waktu"],
+                     threshold=r["ambang_batas"], model_version=r["versi_model"])
             for r in rows]
 
 

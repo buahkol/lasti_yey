@@ -64,13 +64,16 @@ class _Base:
     def _inspections(self, code: str) -> list[Inspection]:
         data = self.api.get(f"/batches/{code}/inspections", ttl=LIST_TTL)
         return [Inspection(r["inspectionId"], code, r["result"], r["anomalyScore"], local(r["timestamp"]),
-                           "dent" if r["result"] == "NG" else "none")
+                           "dent" if r["result"] == "NG" else "none", r.get("threshold"), r.get("modelVersion") or "")
                 for r in data["inspections"]]
 
     def _alert(self, batch: Batch | None, row: Inspection, products: dict[str, dict]) -> Alert:
         product = products.get(batch.sku, {}) if batch else {}
-        return Alert(row.batch, f"{row.timestamp:%H.%M.%S}", row.score, product.get("threshold") or 0.0,
-                     row.defect, batch.product if batch else "", row.timestamp, row.result, row.inspection_id)
+        # the threshold this can was judged with; the product's current one may have changed since
+        threshold = row.threshold if row.threshold is not None else (product.get("threshold") or 0.0)
+        return Alert(row.batch, f"{row.timestamp:%H.%M.%S}", row.score, threshold, row.defect,
+                     batch.product if batch else "", row.timestamp, row.result, row.inspection_id,
+                     row.model_version or product.get("modelVersion") or "")
 
 
 class AuthService(_Base):
@@ -176,7 +179,8 @@ class InspectionService(_Base):
         products = self._products()
         return [self._alert(batches.get(r["batchCode"]),
                             Inspection(r["inspectionId"], r["batchCode"], "NG", r["anomalyScore"],
-                                       local(r["timestamp"]), "dent"), products)
+                                       local(r["timestamp"]), "dent", r.get("threshold"),
+                                       r.get("modelVersion") or ""), products)
                 for r in rows]
 
     def now(self) -> datetime:

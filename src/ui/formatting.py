@@ -21,6 +21,12 @@ def score(value: float) -> str:
     return f"{value:.2f}".replace(".", ",")
 
 
+def threshold(value: float) -> str:
+    """0.9 -> '0,90', 0.975 -> '0,975', 0.172956 -> '0,173': at least 2, at most 3 decimals."""
+    s = f"{value:.3f}"
+    return (s[:-1] if s.endswith("0") else s).replace(".", ",")
+
+
 _MONTHS = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"]
 
 

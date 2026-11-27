@@ -12,6 +12,8 @@ class Inspection:
     score: float
     timestamp: datetime
     defect: str = "none"
+    threshold: float | None = None  # threshold this can was judged with (None: use the product's)
+    model_version: str = ""
 
     @property
     def is_ng(self) -> bool:
