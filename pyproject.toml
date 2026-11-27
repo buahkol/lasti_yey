@@ -33,19 +33,40 @@ server = [
     "pillow>=11.0",
     "numpy>=1.26",
 ]
-# PatchCore model (server inference + ml/ scripts). CUDA wheels on Linux.
+# PatchCore model (server inference + ml/ scripts). Pick exactly one:
+#   ml      GPU build: CUDA 12.8 wheels on Linux (~3 GB), PyPI wheels elsewhere. Also runs on CPU.
+#   ml-cpu  CPU-only build (~250 MB), for machines without an NVIDIA GPU.
 ml = [
     "torch>=2.6",
     "torchvision>=0.21",
 ]
+ml-cpu = [
+    "torch>=2.6",
+    "torchvision>=0.21",
+]
+
+[tool.uv]
+# ml and ml-cpu install different builds of the same packages.
+conflicts = [[{ group = "ml" }, { group = "ml-cpu" }]]
 
 [tool.uv.sources]
-torch = [{ index = "pytorch-cu128", marker = "sys_platform == 'linux'" }]
-torchvision = [{ index = "pytorch-cu128", marker = "sys_platform == 'linux'" }]
+torch = [
+    { index = "pytorch-cu128", group = "ml", marker = "sys_platform == 'linux'" },
+    { index = "pytorch-cpu", group = "ml-cpu", marker = "sys_platform != 'darwin'" },
+]
+torchvision = [
+    { index = "pytorch-cu128", group = "ml", marker = "sys_platform == 'linux'" },
+    { index = "pytorch-cpu", group = "ml-cpu", marker = "sys_platform != 'darwin'" },
+]
 
 [[tool.uv.index]]
 name = "pytorch-cu128"
 url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
 explicit = true
 
 [tool.pytest.ini_options]

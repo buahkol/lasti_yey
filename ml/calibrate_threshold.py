@@ -4,7 +4,8 @@
 * threshold = highest normalised threshold with recall >= target (default 0.90, K2),
   which maximises specificity (K3) at that recall.
 
-uv run python -m ml.calibrate_threshold --manifest dataset/manifests/DEMO-CAN.csv --sku DEMO-CAN
+uv run python -m ml.calibrate_threshold --manifest dataset/manifests/DEMO-CAN.csv \
+    --data-root ~/goodsad --sku DEMO-CAN
 """
 
 from __future__ import annotations
@@ -18,6 +19,8 @@ from ml.common import ROOT, auroc, confusion, pick_threshold, read_manifest, sco
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--manifest", type=Path, required=True)
+    ap.add_argument("--data-root", type=Path, default=None,
+                    help="folder the manifest paths are relative to (the one given to split_dataset)")
     ap.add_argument("--sku", required=True)
     ap.add_argument("--version", default="", help="default: latest version (calibrated or not)")
     ap.add_argument("--model-dir", type=Path, default=ROOT / "models")
@@ -34,7 +37,7 @@ def main() -> None:
     extractor = pc.FeatureExtractor(meta.backbone, meta.feature_dim).to(pc.pick_device(a.device))
     model = pc.PatchCore.load(a.model_dir, a.sku, version, extractor)
 
-    rows = [r for r in read_manifest(a.manifest) if r.split == "val"]
+    rows = [r for r in read_manifest(a.manifest, a.data_root) if r.split == "val"]
     labels = [r.is_ng for r in rows]
     if not any(labels) or all(labels):
         raise SystemExit("Validation split needs both OK and NG images")

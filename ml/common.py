@@ -28,9 +28,25 @@ class Row:
         return self.label == "ng"
 
 
-def read_manifest(path: Path) -> list[Row]:
+def read_manifest(path: Path, data_root: Path | None = None) -> list[Row]:
+    """Read a manifest; relative image paths are resolved against ``data_root``.
+
+    Manifests store paths relative to the folder given to ``split_dataset``
+    (``--raw`` or ``--root``) so the same CSV works on any machine. Absolute
+    paths (older manifests) are used as-is.
+    """
     with open(path, newline="") as f:
-        return [Row(**{k: r.get(k, "") for k in MANIFEST_FIELDS}) for r in csv.DictReader(f)]
+        rows = [Row(**{k: r.get(k, "") for k in MANIFEST_FIELDS}) for r in csv.DictReader(f)]
+    for r in rows:
+        p = Path(r.path)
+        if p.is_absolute():
+            continue
+        if data_root is None:
+            raise SystemExit(
+                f"{path} has relative image paths; pass --data-root (the folder given to split_dataset)"
+            )
+        r.path = str(Path(data_root).expanduser() / p)
+    return rows
 
 
 def write_manifest(path: Path, rows: list[Row]) -> None:
