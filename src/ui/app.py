@@ -41,6 +41,19 @@ class SiMonProApp:
         self.login.showMaximized()
 
     def _open_main(self, user: User) -> None:
+        try:
+            self._build_main(user)
+        except Exception as exc:  # noqa: BLE001 - never leave the operator on the login page without a word
+            if self.window is not None:
+                self.window.deleteLater()
+                self.window = None
+            self.controllers.auth.logout()
+            self.login.reset()
+            detail = getattr(exc, "message", None) or str(exc)
+            toast(self.login, "error", "Gagal membuka aplikasi", f"Data dari server tidak bisa dimuat: {detail}")
+            traceback.print_exc()
+
+    def _build_main(self, user: User) -> None:
         c = self.controllers
         win = AppWindow()
         win.user = user  # printed on PDF reports

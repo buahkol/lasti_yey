@@ -62,7 +62,12 @@ class _Base:
         return {p["sku"]: p for p in self.api.get("/products", ttl=LIST_TTL)}
 
     def _inspections(self, code: str) -> list[Inspection]:
-        data = self.api.get(f"/batches/{code}/inspections", ttl=LIST_TTL)
+        try:
+            data = self.api.get(f"/batches/{code}/inspections", ttl=LIST_TTL)
+        except ApiError as e:
+            if e.status == 404:  # the server answers 404 for a batch without inspections yet (a new batch)
+                return []
+            raise
         return [Inspection(r["inspectionId"], code, r["result"], r["anomalyScore"], local(r["timestamp"]),
                            "dent" if r["result"] == "NG" else "none", r.get("threshold"), r.get("modelVersion") or "")
                 for r in data["inspections"]]
