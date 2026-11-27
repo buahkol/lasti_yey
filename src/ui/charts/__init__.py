@@ -3,7 +3,7 @@
 - StackedBarChart: OK and NG per hour (Dashboard)
 - PeakBarChart: NG per hour with the peak highlighted (Laporan)
 - Gauge: semicircle percentage against a limit (Laporan)
-Hovering a bar moves the highlight and tooltip.
+Hovering a bar shows its tooltip; moving the cursor away hides it again. Bar colours never change.
 """
 
 import math
@@ -79,7 +79,8 @@ class _BarBase(_Animated):
     def __init__(self, labels: list, highlight: int):
         super().__init__()
         self.labels = labels
-        self.highlight = highlight
+        self.highlight = highlight  # bar whose label is bold, for example the current hour
+        self.hover: int | None = None  # bar under the cursor; its tooltip shows only while hovering
         self.setMouseTracking(True)
         self.setMinimumHeight(180)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
@@ -111,14 +112,24 @@ class _BarBase(_Animated):
             p.setPen(QColor(Color.TEXT_PRIMARY if on else Color.TEXT_TERTIARY))
             p.drawText(QRectF(c.left(), pr.bottom() + 6, c.width(), 18), Qt.AlignmentFlag.AlignHCenter, lab)
 
+    def _set_hover(self, index: int | None) -> None:
+        if index != self.hover:
+            self.hover = index
+            self.update()
+
     def mouseMoveEvent(self, e):  # noqa: N802
         pr = self._plot()
-        x = e.position().x()
-        if pr.left() <= x <= pr.right():
+        x, y = e.position().x(), e.position().y()
+        index = None
+        if pr.left() <= x <= pr.right() and pr.top() <= y <= pr.bottom():
             i = int((x - pr.left()) / (pr.width() / len(self.labels)))
-            if 0 <= i < len(self.labels) and self._has_data(i) and i != self.highlight:
-                self.highlight = i
-                self.update()
+            if 0 <= i < len(self.labels) and self._has_data(i):
+                index = i
+        self._set_hover(index)
+
+    def leaveEvent(self, e):  # noqa: N802
+        self._set_hover(None)
+        super().leaveEvent(e)
 
     def _has_data(self, i: int) -> bool:
         return True
@@ -149,7 +160,7 @@ class StackedBarChart(_BarBase):
             c = self._col(i)
             bw = min(34.0, c.width() * 0.5)
             x = c.center().x() - bw / 2
-            on = i == self.highlight
+            hovered = i == self.hover
             if ok <= 0:
                 p.setPen(Qt.PenStyle.NoPen)
                 p.setBrush(QColor(Color.CHART_GRID))
@@ -159,14 +170,15 @@ class StackedBarChart(_BarBase):
             h_ng = max(5.0, ng / m * pr.height() * 3) * self._t
             h_ok = h_total - h_ng - 2
             p.setPen(Qt.PenStyle.NoPen)
-            p.setBrush(QColor(Color.CHART_OK if on else Color.CHART_OK_SOFT))
+            ok_c = QColor(Color.CHART_OK)
+            if hovered:
+                ok_c = ok_c.darker(115)
+            p.setBrush(ok_c)
             if h_ok > 0:
                 p.drawRoundedRect(QRectF(x, pr.bottom() - h_ok, bw, h_ok), 5, 5)
-            ng_c = QColor(Color.CHART_NG)
-            ng_c.setAlphaF(1.0 if on else 0.7)
-            p.setBrush(ng_c)
+            p.setBrush(QColor(Color.CHART_NG))
             p.drawRoundedRect(QRectF(x, pr.bottom() - h_total, bw, h_ng), 5, 5)
-            if on and self._t >= 1:
+            if hovered:
                 anchor = (QPointF(x + bw, pr.bottom() - h_total + 10), lab, ok, ng)
         if anchor:
             pt, lab, ok, ng = anchor
@@ -208,11 +220,9 @@ class PeakBarChart(_BarBase):
                 g.setColorAt(1, QColor(Color.MAGENTA))
                 p.setBrush(g)
             else:
-                col = QColor(Color.PINK)
-                col.setAlphaF(1.0 if i == self.highlight else 0.75)
-                p.setBrush(col)
+                p.setBrush(QColor(Color.PINK).darker(110) if i == self.hover else QColor(Color.PINK))
             p.drawPath(path.simplified())
-            if i != self.highlight or self._t < 1:
+            if i != self.hover:
                 p.setFont(font(Type.CAPTION))
                 p.setPen(QColor(Color.TEXT_SECONDARY))
                 p.drawText(QRectF(c.left(), rect.top() - 22, c.width(), 18), Qt.AlignmentFlag.AlignHCenter, str(ng))
