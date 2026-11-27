@@ -23,34 +23,6 @@ def test_record_event_rejects_closed_batch_and_reject_kind():
     assert "kind" in c.events.record("B-2411-02", "REJECT", "").errors
 
 
-def test_shipment_only_offers_passed_batches():
-    c = make()
-    codes = [b.code for b in c.shipments.passed_batches()]
-    assert "B-2410-26" not in codes
-    assert "B-2411-01" not in codes
-
-
-def test_shipment_saved_with_batch_codes():
-    c = make()
-    result = c.shipments.submit("po-2611-018", ["B-2410-28", "B-2410-27"], "1.200")
-    assert result.shipment is not None
-    assert result.shipment.order_id == "PO-2611-018"
-    assert result.shipment.quantity == 1200
-    assert c.shipments.shipments()[0].batch_codes == ["B-2410-28", "B-2410-27"]
-
-
-def test_shipment_with_hold_batch_is_rejected():
-    c = make()
-    result = c.shipments.submit("PO-2611-019", ["B-2410-28", "B-2410-26"], "50")
-    assert result.shipment is None
-    assert result.hold_batches == ["B-2410-26"]
-
-
-def test_shipment_validation_errors():
-    result = make().shipments.submit("", [], "nol")
-    assert set(result.errors) == {"order", "batches", "quantity"}
-
-
 def test_history_counts_match_batch_and_filter():
     c = make()
     h = c.history.find(" b-2410-24 ")
@@ -70,3 +42,22 @@ def test_greeting_follows_time():
     from src.controllers.dashboard_controller import DashboardController
     greetings = [DashboardController.greeting(datetime(2026, 11, 25, h)) for h in (6, 12, 16, 19, 2)]
     assert greetings == ["Selamat pagi", "Selamat siang", "Selamat sore", "Selamat malam", "Selamat malam"]
+
+
+def test_record_event_accepts_typed_kind():
+    c = make()
+    result = c.events.record("B-2411-02", "Pemadaman listrik", "Listrik padam 10 menit", datetime(2026, 11, 25, 10, 50))
+    assert result.errors == {}
+    assert c.events.events("B-2411-02")[0].kind == "PEMADAMAN_LISTRIK"
+    assert ("PEMADAMAN_LISTRIK", "Pemadaman listrik", "Diketik sebelumnya") in c.events.kind_suggestions()
+    assert c.events.record("B-2411-02", "alat berhenti", "").event.kind == "ALAT_BERHENTI"
+    assert "kind" in c.events.record("B-2411-02", "  ", "").errors
+
+
+def test_alert_time_windows_grow_with_the_window():
+    c = make()
+    counts = c.alerts.counts()
+    assert counts == sorted(counts) and counts[0] == 7
+    summary = c.alerts.summary(0)
+    assert summary.count == 7 and summary.top.score == 0.93
+    assert summary.batches == ["B-2411-01", "B-2411-02"]

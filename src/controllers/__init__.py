@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 
 from ..services import (
-    AuthService, BatchService, EventService, InspectionService, ProductService, ReportService, ShipmentService,
+    AuthService, BatchService, EventService, InspectionService, ProductService, ReportService,
 )
 from .alert_controller import AlertController
 from .auth_controller import AuthController
@@ -13,7 +13,6 @@ from .event_controller import EventController
 from .history_controller import HistoryController
 from .product_controller import ProductController
 from .report_controller import ReportController
-from .shipment_controller import ShipmentController
 
 
 @dataclass
@@ -25,7 +24,6 @@ class Controllers:
     alerts: AlertController
     reports: ReportController
     events: EventController
-    shipments: ShipmentController
     history: HistoryController
 
     @classmethod
@@ -41,13 +39,12 @@ class Controllers:
             alerts=AlertController(inspections),
             reports=ReportController(reports, batches, products),
             events=EventController(EventService(), batches),
-            shipments=ShipmentController(ShipmentService(), batches),
             history=HistoryController(inspections, batches),
         )
 
 
 __all__ = [
     "Controllers", "AuthController", "DashboardController", "ProductController", "BatchController",
-    "CreateResult", "AlertController", "ReportController", "EventController", "ShipmentController",
+    "CreateResult", "AlertController", "ReportController", "EventController",
     "HistoryController",
 ]

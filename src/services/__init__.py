@@ -11,7 +11,5 @@ from .event_service import EventService
 from .inspection_service import InspectionService
 from .product_service import ProductService
 from .report_service import ReportService
-from .shipment_service import ShipmentService
 
-__all__ = ["AuthService", "BatchService", "EventService", "InspectionService", "ProductService", "ReportService",
-           "ShipmentService"]
+__all__ = ["AuthService", "BatchService", "EventService", "InspectionService", "ProductService", "ReportService"]

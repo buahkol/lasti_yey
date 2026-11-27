@@ -9,8 +9,7 @@ from .batch import Batch, BatchStatus, InspectionStatus
 from .event import ProductionEvent
 from .inspection import Inspection
 from .product import Product
-from .shipment import Shipment
 from .user import User
 
-__all__ = ["Alert", "Batch", "BatchStatus", "Inspection", "InspectionStatus", "Product", "ProductionEvent", "Shipment",
+__all__ = ["Alert", "Batch", "BatchStatus", "Inspection", "InspectionStatus", "Product", "ProductionEvent",
            "User"]

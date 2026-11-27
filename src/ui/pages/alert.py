@@ -2,14 +2,12 @@
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor, QPainter, QPen
-from PyQt6.QtWidgets import QFrame, QLabel, QWidget
+from PyQt6.QtWidgets import QWidget
 
 from ...controllers import AlertController
+from ...controllers.alert_controller import WINDOWS
 from .. import formatting as fmt
-from ..assets import pixmap
-from ..components import (
-    AdaptiveRow, Button, DefectCard, LiveIndicator, ResponsiveGrid, SegmentedTabs, StatCard, hbox, text, vbox,
-)
+from ..components import AdaptiveRow, DefectCard, LiveIndicator, ResponsiveGrid, SegmentedTabs, StatCard, hbox, text
 from ..shell import Page
 from ..theme import Color, Type
 from .common import open_photo_viewer
@@ -29,28 +27,10 @@ class _DashedRing(QWidget):
         p.drawEllipse(1, 1, 13, 11)
 
 
-class _OlderTile(QFrame):
-    def __init__(self, on_click):
-        super().__init__()
-        self.setObjectName("Older")
-        self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setStyleSheet(f"QFrame#Older {{ background: rgba(255,255,255,0.6); border: 1px dashed {Color.BORDER_STRONG};"
-                           " border-radius: 18px; }")
-        lay = vbox(8, (16, 16, 16, 16), self)
-        lay.addStretch(1)
-        ic = QLabel()
-        ic.setPixmap(pixmap("history", Color.ICON, 24))
-        ic.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        lay.addWidget(ic)
-        lay.addWidget(text("Alert sebelumnya", Type.HEADING, align=Qt.AlignmentFlag.AlignCenter))
-        lay.addWidget(text("Lihat di halaman Riwayat dan klaim", Type.CAPTION, Color.TEXT_TERTIARY,
-                           align=Qt.AlignmentFlag.AlignCenter))
-        lay.addStretch(1)
-        self._on_click = on_click
-
-    def mouseReleaseEvent(self, e):  # noqa: N802
-        self._on_click()
-        super().mouseReleaseEvent(e)
+def _and(items: list[str]) -> str:
+    if len(items) <= 1:
+        return "".join(items)
+    return ", ".join(items[:-1]) + " dan " + items[-1]
 
 
 class AlertPage(Page):
@@ -58,29 +38,16 @@ class AlertPage(Page):
         super().__init__("Alert kemasan cacat")
         self._ctrl = controller
         self._win = window_getter
+        self.window = 0
         self.actions.addWidget(LiveIndicator())
-        self.actions.addWidget(Button("30 menit terakhir", "outline", "md", "clock"))
 
-        a = self._ctrl.summary()
-        stats = ResponsiveGrid(220, 4, 16, steps=(4, 2, 1))
-        stats.add(StatCard("pink", "warning", "NG 30 menit terakhir", str(a["ng_30min"]), "kaleng",
-                           a["ng_delta"], f"sejak pukul {a['since']}", "trend-up", highlight_value=True))
-        stats.add(StatCard("indigo", "activity", "Skor anomali rata-rata", fmt.score(a["avg_score"]),
-                           "", "ambang 0,62", "B-2411-01"))
-        stats.add(StatCard("blue", "trend-up", "Skor tertinggi", fmt.score(a["top_score"]), "",
-                           a["top_batch"], f"pukul {a['top_time']}"))
-        stats.add(StatCard("amber", "layers", "Batch terdampak", str(a["affected_batches"]), "batch", "HOLD",
-                           "B-2411-01 dan B-2411-02"))
-        self.body.addWidget(stats)
+        self.stats = ResponsiveGrid(220, 4, 16, steps=(4, 2, 1))
+        self.body.addWidget(self.stats)
 
         bar = AdaptiveRow(spacing=12)
-        batches = self._ctrl.batches()
-        items = [("Semua batch", str(len(self._ctrl.alerts())))] + [
-            (b, str(len(self._ctrl.alerts(b)))) for b in batches]
-        self._batches = [None] + batches
-        tabs = SegmentedTabs(items)
-        tabs.changed.connect(self._filter)
-        bar.add(tabs, 0, align=Qt.AlignmentFlag.AlignLeft)
+        self.tabs = SegmentedTabs([(label, "0") for label, _ in WINDOWS])
+        self.tabs.changed.connect(self._set_window)
+        bar.add(self.tabs, 0, align=Qt.AlignmentFlag.AlignLeft)
         bar.add_stretch()
         legend = QWidget()
         l_lay = hbox(8, (0, 0, 0, 0), legend)
@@ -90,14 +57,41 @@ class AlertPage(Page):
         self.body.addWidget(bar)
 
         self.grid = ResponsiveGrid(250, 4, 16, steps=(4, 3, 2, 1))
-        self.body.addWidget(self.grid, 1)
-        self._filter(0)
+        self.body.addWidget(self.grid)
+        self.empty = text("", Type.BODY, Color.TEXT_TERTIARY, align=Qt.AlignmentFlag.AlignCenter)
+        self.empty.setContentsMargins(0, 48, 0, 48)
+        self.body.addWidget(self.empty)
+        self.body.addStretch(1)
+        self._render()
 
-    def _filter(self, index: int) -> None:
-        batch = self._batches[index]
+    def on_show(self) -> None:
+        self._render()
+
+    def _set_window(self, index: int) -> None:
+        self.window = index
+        self._render()
+
+    def _render(self) -> None:
+        label = WINDOWS[self.window][0]
+        period = "hari ini" if WINDOWS[self.window][1] is None else f"{label} terakhir"
+        self.tabs.set_counts(self._ctrl.counts())
+        a = self._ctrl.summary(self.window)
+        self.stats.clear()
+        self.stats.add(StatCard("pink", "warning", f"NG {period}", str(a.count), "kaleng", a.delta,
+                                f"sejak pukul {a.since:%H.%M}", "trend-up" if a.delta.startswith("+") else None,
+                                highlight_value=True))
+        self.stats.add(StatCard("indigo", "activity", "Skor anomali rata-rata", fmt.score(a.avg_score) if a.count else "-",
+                                "", f"ambang {fmt.score(a.avg_threshold)}" if a.count else "ambang -", f"{a.count} kaleng"))
+        top = a.top
+        self.stats.add(StatCard("blue", "trend-up", "Skor tertinggi", fmt.score(top.score) if top else "-", "",
+                                top.batch if top else "-", f"pukul {top.time[:5]}" if top else ""))
+        self.stats.add(StatCard("amber", "layers", "Batch terdampak", str(len(a.batches)), "batch",
+                                "HOLD" if a.batches else "-", _and(a.batches)))
         self.grid.clear()
-        for i, al in enumerate(self._ctrl.alerts(batch)):
-            card = DefectCard(al.batch, al.time, al.score, al.threshold, al.defect, highlight=i == 0 and batch is None)
+        alerts = self._ctrl.alerts(self.window)
+        for i, al in enumerate(alerts):
+            card = DefectCard(al.batch, al.time, al.score, al.threshold, al.defect, highlight=i == 0)
             card.clicked.connect(lambda a=al: open_photo_viewer(self._win(), a))
             self.grid.add(card)
-        self.grid.add(_OlderTile(lambda: self._win().go("riwayat")))
+        self.empty.setVisible(not alerts)
+        self.empty.setText(f"Tidak ada kaleng NG dalam {period}. Pilih rentang waktu yang lebih panjang.")

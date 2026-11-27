@@ -8,7 +8,7 @@ import random
 import re
 from datetime import date, datetime, timedelta
 
-from ..models import Alert, Batch, Inspection, Product, ProductionEvent, Shipment, User
+from ..models import Alert, Batch, Inspection, Product, ProductionEvent, User
 
 TODAY = date(2026, 11, 25)
 
@@ -49,14 +49,32 @@ BATCHES = [
 ]
 
 # GET /inspections/alerts
+# Sample clock: the screens show the state at 25 Nov 2026, 10.45.
+NOW = datetime(2026, 11, 25, 10, 45)
+
+
+def _alert(batch: str, time: str, score: float, defect: str) -> Alert:
+    threshold, product = (0.62, _TMT) if batch == "B-2411-01" else (0.64, _CBI)
+    at = datetime.combine(TODAY, datetime.strptime(time, "%H.%M.%S").time())
+    return Alert(batch, time, score, threshold, defect, product, at)
+
+
 ALERTS = [
-    Alert("B-2411-01", "10.42.07", 0.87, 0.62, "dent", _TMT),
-    Alert("B-2411-01", "10.39.51", 0.81, 0.62, "label", _TMT),
-    Alert("B-2411-02", "10.36.14", 0.93, 0.64, "rust", _CBI),
-    Alert("B-2411-02", "10.33.40", 0.77, 0.64, "dent", _CBI),
-    Alert("B-2411-01", "10.31.02", 0.74, 0.62, "label", _TMT),
-    Alert("B-2411-02", "10.27.18", 0.70, 0.64, "rust", _CBI),
-    Alert("B-2411-01", "10.15.44", 0.68, 0.62, "dent", _TMT),
+    _alert("B-2411-01", "10.42.07", 0.87, "dent"),
+    _alert("B-2411-01", "10.39.51", 0.81, "label"),
+    _alert("B-2411-02", "10.36.14", 0.93, "rust"),
+    _alert("B-2411-02", "10.33.40", 0.77, "dent"),
+    _alert("B-2411-01", "10.31.02", 0.74, "label"),
+    _alert("B-2411-02", "10.27.18", 0.70, "rust"),
+    _alert("B-2411-01", "10.15.44", 0.68, "dent"),
+    _alert("B-2411-02", "10.06.25", 0.79, "label"),
+    _alert("B-2411-01", "09.58.12", 0.72, "dent"),
+    _alert("B-2411-02", "09.51.37", 0.88, "rust"),
+    _alert("B-2411-02", "09.20.03", 0.71, "dent"),
+    _alert("B-2411-01", "08.47.55", 0.66, "label"),
+    _alert("B-2411-02", "08.12.48", 0.75, "rust"),
+    _alert("B-2411-01", "07.36.20", 0.69, "dent"),
+    _alert("B-2411-02", "07.24.09", 0.82, "label"),
 ]
 ALERT_SUMMARY = {"ng_30min": 7, "ng_delta": "+3", "since": "10.12", "avg_score": 0.80,
                  "top_score": 0.93, "top_batch": "B-2411-02", "top_time": "10.36", "affected_batches": 2}
@@ -135,17 +153,6 @@ EVENTS = {
 }
 
 
-def _at(value: str) -> datetime:
-    return datetime.strptime(value, "%Y-%m-%d %H.%M")
-
-
-SHIPMENTS = [
-    Shipment(17, "PO-2611-017", ["B-2410-22", "B-2410-23"], 1540, _at("2026-11-25 09.15")),
-    Shipment(16, "PO-2611-016", ["B-2410-25"], 851, _at("2026-11-25 08.20")),
-    Shipment(15, "PO-2611-015", ["B-2410-24"], 600, _at("2026-11-24 15.10")),
-    Shipment(14, "PO-2611-014", ["B-2410-24"], 666, _at("2026-11-24 09.30")),
-    Shipment(13, "PO-2611-013", ["B-2410-19", "B-2410-20"], 1800, _at("2026-11-24 07.45")),
-]
 
 
 def _minutes(duration: str) -> int:

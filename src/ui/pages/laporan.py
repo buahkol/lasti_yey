@@ -7,7 +7,7 @@ Per tanggal: production recap for a date range with output and NG per day and a 
 from datetime import date
 
 from PyQt6.QtCore import QDate, Qt
-from PyQt6.QtWidgets import QFrame, QLabel, QMenu, QStackedWidget, QWidget
+from PyQt6.QtWidgets import QFrame, QLabel, QStackedWidget, QWidget
 
 from ...controllers import ReportController
 from ...controllers.report_controller import day_label
@@ -17,15 +17,12 @@ from ..assets import pixmap
 from ..charts import Gauge, PeakBarChart, StackedBarChart
 from ..components import (
     AdaptiveRow, AlertRow, Badge, Button, Card, DataTable, DatePicker, PanelHeader, ResponsiveGrid, SegmentedTabs,
-    StatCard, event_kind, format_range, hbox, text, toast, two_line, vbox,
+    Option, StatCard, event_kind, format_range, hbox, open_select, text, toast, two_line, vbox,
 )
 from ..shell import Page
 from ..theme import TONES, Color, Type
 from .common import open_export_pdf, open_photo_viewer
 
-_MENU_STYLE = (f"QMenu {{ background: #FFFFFF; border: 1px solid {Color.BORDER}; border-radius: 12px; padding: 6px; }}"
-               "QMenu::item { padding: 8px 14px; border-radius: 8px; }"
-               f"QMenu::item:selected {{ background: {Color.BRAND_SOFT}; color: {Color.TEXT_PRIMARY}; }}")
 _TODAY = QDate(2026, 11, 25)
 
 
@@ -128,15 +125,11 @@ class LaporanPage(Page):
             open_export_pdf(self._win(), date_label=label, per_date=True)
         else:
             report = self._ctrl.batch_report(self.code)
-            open_export_pdf(self._win(), self.code, report["product"] if report else "")
+            open_export_pdf(self._win(), self.code, report["product"] if report else "", batches=self._ctrl.batches())
 
     def _batch_menu(self) -> None:
-        menu = QMenu(self)
-        menu.setStyleSheet(_MENU_STYLE)
-        for b in self._ctrl.batches():
-            act = menu.addAction(f"{b.code}, {b.product}")
-            act.triggered.connect(lambda _=False, code=b.code: self.show_batch(code))
-        menu.exec(self.batch_btn.mapToGlobal(self.batch_btn.rect().bottomLeft()))
+        options = [Option(b.code, b.code, f"{b.product}, {b.start_label}") for b in self._ctrl.batches()]
+        open_select(self.batch_btn, options, self.show_batch, self.code, "Cari kode batch atau produk")
 
     def _pick_date(self) -> None:
         picker = DatePicker(*self.range, _TODAY, self)
@@ -217,8 +210,8 @@ class LaporanPage(Page):
         card.layout_.addStretch(1)
         card.add(Gauge(r["ng_percent"], NG_TOLERANCE_PERCENT, 10.0), 0, Qt.AlignmentFlag.AlignHCenter)
         gap = f"{r['ng_percent'] - NG_TOLERANCE_PERCENT:.1f}".replace(".", ",")
-        msg = (f"NG melewati batas {gap} poin. Batch tetap HOLD dan belum dapat dikirim." if held
-               else "NG di bawah batas toleransi. Batch dapat dipilih saat mencatat pengiriman.")
+        msg = (f"NG melewati batas {gap} poin. Batch berstatus HOLD dan belum lolos inspeksi." if held
+               else "NG di bawah batas toleransi. Batch lolos inspeksi.")
         card.layout_.addStretch(1)
         card.add(_note(held, msg))
         return card
@@ -270,9 +263,9 @@ class LaporanPage(Page):
         side.layout_.addLayout(scale)
         side.layout_.addStretch(1)
         if r["hold"]:
-            msg = f"{r['hold']} batch ditutup dengan status HOLD dan belum dapat dikirim. Periksa daftar di bawah."
+            msg = f"{r['hold']} batch ditutup dengan status HOLD dan belum lolos inspeksi. Periksa daftar di bawah."
         else:
-            msg = "Semua batch yang sudah ditutup berstatus PASSED dan dapat dipilih saat mencatat pengiriman."
+            msg = "Semua batch yang sudah ditutup berstatus PASSED dan lolos inspeksi."
         side.add(_note(r["hold"] > 0, msg))
         row2.add(side, 0, fixed_width=400)
         lay.addWidget(row2)
