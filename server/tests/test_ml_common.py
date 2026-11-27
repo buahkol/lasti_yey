@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+from pathlib import Path
 
 from ml.common import auroc, confusion, pick_threshold
 from server.app.services import compute_inspection_status
@@ -60,7 +61,9 @@ def test_manifest_paths_are_relative_and_resolve(tmp_path):
     moved = tmp_path / "elsewhere"
     raw.rename(moved)  # same manifest, data in a different place
     resolved = read_manifest(m, moved)
-    assert all((moved / r.path.split("elsewhere/")[1]).exists() for r in resolved)
+    # compare as Paths: the manifest always uses "/", the OS separator may differ (Windows uses "\")
+    assert [Path(r.path) for r in resolved] == [moved / r.path for r in rows]
+    assert all(Path(r.path).exists() for r in resolved)
 
     import pytest
     with pytest.raises(SystemExit):
@@ -71,5 +74,6 @@ def test_absolute_manifest_paths_still_work(tmp_path):
     from ml.common import Row, read_manifest, write_manifest
 
     m = tmp_path / "m.csv"
-    write_manifest(m, [Row("/abs/a.jpg", "train", "ok", "g1")])
-    assert read_manifest(m)[0].path == "/abs/a.jpg"
+    absolute = str(tmp_path / "abs" / "a.jpg")  # a real absolute path on this OS ("/abs" has no drive on Windows)
+    write_manifest(m, [Row(absolute, "train", "ok", "g1")])
+    assert read_manifest(m)[0].path == absolute
