@@ -1,333 +1,208 @@
 # SiMonPro - Sistem Monitoring Produksi
 
-## Penjelasan Singkat Aplikasi
-
-SiMonPro (Sistem Monitoring Produksi) adalah aplikasi desktop yang digunakan untuk memantau dan mengelola aktivitas produksi, khususnya pada bidang tekstil dan pakaian. Aplikasi ini membantu Owner dan Admin dalam melihat performa produksi, pencapaian target, serta tingkat defect melalui dashboard yang terintegrasi.
-
-Fitur utama yang tersedia mencakup autentikasi pengguna, dashboard monitoring produksi, pengelolaan data produk dan kategori, pencatatan target serta produksi harian, pencatatan defect, dan pembuatan laporan.
+Pencatatan produksi dan inspeksi kemasan sarden kaleng berbasis IoT dan AI. Perangkat ESP32-S3 dengan
+kamera OV5640 memotret setiap kaleng yang lewat sensor IR, server memeriksanya dengan model PatchCore
+(deteksi anomali), LED merah menyala bila kaleng NG, dan operator memantau semuanya di aplikasi desktop.
 
 ---
 
-## Prasyarat dan Instalasi
+## Arsitektur
 
-### Prasyarat
-
-Pastikan perangkat telah memiliki:
-
-- Python 3.10 atau lebih tinggi
-- Docker dan Docker Compose
-- PostgreSQL 15 (dijalankan melalui Docker Compose)
-- pip atau uv
-
-### Langkah Instalasi
-
-#### Quick Setup (Recommended)
-
-Untuk instalasi otomatis (Python, Docker, dependensi menggunakan **uv**, dan shortcut desktop), jalankan skrip berikut:
-
-- **Windows**: Jalankan PowerShell sebagai Administrator:
-  ```powershell
-  .\install.ps1
-  ```
-- **Linux**: Jalankan di terminal:
-  ```bash
-  chmod +x install.sh && ./install.sh
-  ```
-
----
-
-#### Manual Setup
-
-1. **Klon repositori proyek**
-
-   ```bash
-   git clone https://github.com/duskoide/IF2050-2026-K01-G08-SimonPro.git
-   cd IF2050-2026-K01-G08-SimonPro
-   ```
-
-2. **Buat dan jalankan container PostgreSQL**
-
-   Aplikasi menggunakan Docker Compose untuk menyediakan basis data PostgreSQL. Jalankan perintah berikut:
-
-   ```bash
-   docker compose up -d
-   ```
-
-3. **Instal dependensi Python (Menggunakan uv)**
-
-   Pastikan Anda telah menginstal [uv](https://github.com/astral-sh/uv). Kemudian jalankan:
-
-   ```bash
-   uv sync
-   ```
-
-   _(Opsional: Jika tidak menggunakan uv, gunakan `pip install -r requirements.txt`)_
-
-   Server inspeksi (FastAPI + PatchCore) **mendukung CPU maupun GPU NVIDIA**. Pilih salah satu:
-   `uv sync --group server --group ml` (GPU, CUDA) atau `uv sync --group server --group ml-cpu`
-   (hanya CPU, unduhan jauh lebih kecil). Detail: [`server/README.md`](server/README.md#cpu-or-gpu).
-
-4. **Konfigurasi koneksi basis data (opsional)**
-
-   Secara default, aplikasi terhubung ke basis data dengan konfigurasi berikut:
-   - Host: `localhost`
-   - Port: `5433`
-   - Database: `simonpro`
-   - Username: `postgres`
-   - Password: `secret`
-
-   Jika perlu mengubah konfigurasi, atur variabel lingkungan berikut sebelum menjalankan aplikasi:
-
-   ```bash
-   set DB_HOST=localhost
-   set DB_PORT=5433
-   set DB_NAME=simonpro
-   set DB_USER=postgres
-   set DB_PASSWORD=secret
-   ```
-
----
-
-## Cara Menjalankan Aplikasi
-
-SiMonPro terdiri dari empat bagian yang berjalan bersamaan:
-
-| Bagian | Tempat berjalan | Panduan |
+| Bagian | Berjalan di | Panduan |
 |---|---|---|
-| PostgreSQL | Docker/Podman, port 5433 | langkah 1 di bawah |
-| Server REST API + PatchCore | edge server (atau laptop, CPU) | [`server/README.md`](server/README.md) |
-| Perangkat ESP32-S3 + OV5640 | kotak foto di lini | [`firmware/README.md`](firmware/README.md) |
-| Aplikasi desktop (PyQt6) | komputer operator | langkah 2 dan 3 di bawah |
+| PostgreSQL 15 | Docker/Podman, port 5433 | bagian *Menjalankan* di bawah |
+| Server REST API + PatchCore (FastAPI) | edge server (GPU) atau laptop (CPU), port 8000 | [`server/README.md`](server/README.md) |
+| Perangkat ESP32-S3 + OV5640 + sensor IR | kotak foto di lini | [`firmware/README.md`](firmware/README.md) |
+| Aplikasi desktop (PyQt6) | komputer operator | bagian *Menjalankan* di bawah |
 
-Aplikasi desktop **tidak** membaca database langsung: semua data (produk, batch, inspeksi, foto,
-kejadian, laporan) diambil dari server lewat REST API `/api/v1`.
+```
+ESP32 --(Wi-Fi, HTTP)--> server :8000 --> PostgreSQL :5433
+                            ^
+aplikasi desktop --(REST /api/v1)--+
+```
 
-1. **Jalankan PostgreSQL dan server**
-
-   ```bash
-   docker compose up -d                       # atau: podman compose up -d
-   uv run uvicorn server.app.main:app --host 0.0.0.0 --port 8000
-   curl http://localhost:8000/api/v1/health   # menampilkan model yang dimuat dan device (cpu/cuda)
-   ```
-
-   Database yang dibuat sebelum 27 Nov 2026 perlu migrasi sekali (jenis kejadian bebas):
-   `docker compose exec -T postgres psql -U postgres -d simonpro < database/migrations/2026-11-27-event-kinds.sql`
-
-2. **Jalankan aplikasi desktop**
-
-   ```bash
-   uv run python main.py                                        # server di localhost:8000
-   SIMONPRO_API_URL=http://192.168.1.15:8000/api/v1 uv run python main.py   # server di komputer lain
-   ```
-
-   PowerShell: `$env:SIMONPRO_API_URL = "http://192.168.1.15:8000/api/v1"; uv run python main.py`
-
-   Tanpa server (hanya melihat tampilan dengan data contoh yang tetap): `SIMONPRO_SAMPLE=1 uv run python main.py`,
-   login `operasional` / `simonpro`.
-
-3. **Login ke aplikasi**
-
-   Akun dari `database/dummy.sql`: username `operasional`, password `operasional123`.
-   Ganti password ini sebelum demo atau dipakai di lini.
-
-4. **Alur pemakaian**
-
-   - **Produk**: daftarkan SKU dan harga satuan (dipakai untuk estimasi kerugian). Ambang batas dan versi
-     model terisi otomatis setelah server memuat model PatchCore untuk SKU tersebut.
-   - **Batch**: buat batch (format `B-YYMM-NN`, contoh `B-2611-01`). Perangkat otomatis mengikuti batch
-     yang sedang berjalan (paling baru) dalam 5 detik; tidak perlu mengetik kode batch di perangkat.
-   - **Dashboard** diperbarui setiap 5 detik: output, OK/NG, grafik per jam, dan alert terbaru.
-   - **Alert** dan **Riwayat** menampilkan foto asli dari kamera untuk setiap kaleng yang diperiksa.
-   - **Kejadian**: catat kejadian manual (bahan baku habis, alat berhenti, atau jenis yang diketik sendiri).
-     REJECT dicatat otomatis oleh AI.
-   - **Laporan**: laporan per batch dan rekap per tanggal, bisa diekspor ke PDF.
-   - **Tutup batch** menghitung status akhir (PASSED jika NG paling banyak 5%, selain itu HOLD).
+**Aplikasi desktop tidak membaca database langsung.** Semua data (produk, batch, inspeksi, foto, kejadian,
+laporan) diambil dari server lewat REST API `/api/v1`. Tanpa server yang berjalan, aplikasi hanya bisa
+dibuka dalam mode data contoh (lihat di bawah).
 
 ---
 
-## Daftar Modul yang Diimplementasikan
+## Prasyarat
 
-### Autentikasi dan Manajemen Sesi
+- [uv](https://docs.astral.sh/uv/) (mengatur Python dan semua dependensi; Python 3.10 atau lebih baru)
+- Docker Desktop (Windows) atau Docker/Podman (Linux) untuk PostgreSQL
+- Git
+- Opsional: GPU NVIDIA untuk server (CPU juga bisa, lihat [CPU atau GPU](server/README.md#cpu-or-gpu))
 
-| Nama Modul | Deskripsi                                                                                                                          |
-| ---------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| Login      | Halaman autentikasi pengguna dengan validasi username dan password, dilengkapi dengan manajemen sesi yang tersimpan di basis data. |
+Instalasi otomatis (Python, uv, Docker, shortcut desktop, `uv sync`, `docker compose up -d`):
 
-### Dashboard dan Monitoring
+- **Windows** (PowerShell sebagai Administrator): `.\install.ps1`
+- **Linux**: `chmod +x install.sh && ./install.sh`
 
-| Nama Modul | Deskripsi                                                                                                                                                   |
-| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Dashboard  | Halaman utama yang menampilkan ringkasan performa produksi, termasuk total produksi, persentase pencapaian target, tingkat defect, dan jumlah produk aktif. |
-
-### Manajemen Data Master
-
-| Nama Modul      | Deskripsi                                                                                                       |
-| --------------- | --------------------------------------------------------------------------------------------------------------- |
-| Produk          | Modul untuk mengelola data produk, termasuk nama produk, deskripsi, satuan, gambar, status aktif, dan kategori. |
-| Kategori Produk | Modul klasifikasi produk ke dalam kategori tertentu, seperti Atasan, Bawahan, dan Pakaian Dalam.                |
-
-### Operasional Produksi
-
-| Nama Modul      | Deskripsi                                                                                                                  |
-| --------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| Target Produksi | Modul untuk menetapkan target jumlah produksi per produk dalam periode tertentu (harian, mingguan, bulanan, atau tahunan). |
-| Input Produksi  | Modul pencatatan hasil produksi harian, termasuk jumlah aktual, jumlah defect, penanggung jawab, dan kendala produksi.     |
-| Defect          | Modul pencatatan dan klasifikasi kecacatan produk berdasarkan tipe defect yang telah ditentukan.                           |
-
-### Pelaporan
-
-| Nama Modul | Deskripsi                                                                                 |
-| ---------- | ----------------------------------------------------------------------------------------- |
-| Pencapaian | Modul evaluasi pencapaian target produksi dibandingkan dengan hasil aktual yang tercatat. |
-| Laporan    | Modul generasi laporan produksi dalam bentuk dokumen.                                     |
+Skrip ini hanya menyiapkan **aplikasi desktop dan database**. Dependensi server dipasang terpisah
+(langkah 2 di bawah).
 
 ---
 
-## Daftar Tabel Basis Data
+## Menjalankan
 
-### 1. users
+Semua perintah dijalankan dari folder repositori.
 
-Tabel untuk menyimpan data pengguna aplikasi.
+```bash
+git clone https://github.com/buahkol/lasti_yey.git
+cd lasti_yey
+```
 
-| Kolom    | Tipe Data    | Keterangan                           |
-| -------- | ------------ | ------------------------------------ |
-| user_id  | SERIAL       | Primary Key                          |
-| username | VARCHAR(100) | Nama pengguna (unik, wajib diisi)    |
-| password | VARCHAR(255) | Kata sandi pengguna (wajib diisi)    |
-| role     | user_role    | Peran pengguna: `owner` atau `admin` |
+### 1. Database
 
-### 2. kategori_produk
+```bash
+docker compose up -d          # PostgreSQL 15 di port 5433; init.sql + dummy.sql dimuat saat pertama dibuat
+docker compose ps             # status harus "running"
+```
 
-Tabel untuk menyimpan kategori produk.
+Database yang dibuat **sebelum 27 Nov 2026** perlu migrasi satu kali (jenis kejadian bebas):
 
-| Kolom         | Tipe Data    | Keterangan                               |
-| ------------- | ------------ | ---------------------------------------- |
-| kategori_id   | SERIAL       | Primary Key                              |
-| nama_kategori | VARCHAR(100) | Nama kategori produk (unik, wajib diisi) |
+```bash
+docker compose exec -T postgres psql -U postgres -d simonpro < database/migrations/2026-11-27-event-kinds.sql
+```
 
-### 3. produk
+PowerShell tidak mendukung `<`; gunakan:
 
-Tabel untuk menyimpan data produk yang diproduksi.
+```powershell
+Get-Content database\migrations\2026-11-27-event-kinds.sql | docker compose exec -T postgres psql -U postgres -d simonpro
+```
 
-| Kolom            | Tipe Data    | Keterangan                                      |
-| ---------------- | ------------ | ----------------------------------------------- |
-| produk_id        | SERIAL       | Primary Key                                     |
-| nama_produk      | VARCHAR(255) | Nama produk (wajib diisi)                       |
-| deskripsi_produk | TEXT         | Deskripsi produk                                |
-| satuan           | VARCHAR(50)  | Satuan produk                                   |
-| gambar           | TEXT         | Path atau URL gambar produk                     |
-| status_aktif     | BOOLEAN      | Status aktif produk (default: TRUE)             |
-| nama_kategori    | VARCHAR(100) | Foreign Key ke `kategori_produk(nama_kategori)` |
+### 2. Server
 
-### 4. target_produksi
+```bash
+uv sync --group server --group ml-cpu      # tanpa GPU NVIDIA (unduhan ~250 MB)
+uv sync --group server --group ml          # dengan GPU NVIDIA (CUDA, ~3 GB)
+uv run uvicorn server.app.main:app --host 0.0.0.0 --port 8000
+```
 
-Tabel untuk menyimpan target produksi per periode.
+Biarkan terminal ini tetap terbuka. Di terminal lain, periksa:
 
-| Kolom           | Tipe Data    | Keterangan                                                     |
-| --------------- | ------------ | -------------------------------------------------------------- |
-| target_id       | SERIAL       | Primary Key                                                    |
-| produk_id       | INT          | Foreign Key ke `produk(produk_id)`                             |
-| periode         | periode_type | Jenis periode: `harian`, `mingguan`, `bulanan`, atau `tahunan` |
-| tanggal_mulai   | DATE         | Tanggal mulai periode target (wajib diisi)                     |
-| tanggal_selesai | DATE         | Tanggal akhir periode target (wajib diisi)                     |
-| jumlah_target   | INT          | Jumlah target produksi (wajib diisi, minimal 0)                |
+```bash
+curl http://localhost:8000/api/v1/health       # PowerShell: curl.exe http://localhost:8000/api/v1/health
+```
 
-### 5. produksi_harian
+Jawaban yang benar memuat `"status":"ok"` dan model `PLS-Sarden` (model showcase ada di `models/`).
+Dokumentasi API interaktif: `http://localhost:8000/docs`.
 
-Tabel untuk mencatat hasil produksi harian.
+> **Penting:** `uv sync` tanpa `--group` **menghapus** paket server (torch, fastapi). Selalu sertakan grup
+> yang dipakai saat menjalankan `uv sync` lagi.
 
-| Kolom            | Tipe Data    | Keterangan                                      |
-| ---------------- | ------------ | ----------------------------------------------- |
-| produksi_id      | SERIAL       | Primary Key                                     |
-| tanggal          | DATE         | Tanggal produksi (wajib diisi)                  |
-| produk_id        | INT          | Foreign Key ke `produk(produk_id)`              |
-| jumlah_aktual    | INT          | Jumlah produksi aktual (wajib diisi, minimal 0) |
-| jumlah_defect    | INT          | Jumlah produk cacat (wajib diisi, minimal 0)    |
-| penanggung_jawab | VARCHAR(255) | Nama penanggung jawab produksi (wajib diisi)    |
-| kendala_produksi | TEXT         | Catatan kendala yang dihadapi saat produksi     |
+### 3. Aplikasi desktop
 
-### 6. tipe_defect
+```bash
+uv run python main.py
+```
 
-Tabel untuk menyimpan klasifikasi jenis kecacatan produk.
+- **Windows/PowerShell:** ketik `uv run python main.py` (atau `.\run-simonpro.ps1`), **bukan** `main.py` saja.
+- Server di komputer lain: atur alamatnya dulu.
+  - PowerShell: `$env:SIMONPRO_API_URL = "http://192.168.1.15:8000/api/v1"; uv run python main.py`
+  - Linux: `SIMONPRO_API_URL=http://192.168.1.15:8000/api/v1 uv run python main.py`
+- Tanpa server (hanya melihat tampilan dengan data contoh yang tetap): `SIMONPRO_SAMPLE=1`
+  (PowerShell: `$env:SIMONPRO_SAMPLE = "1"`), login `operasional` / `simonpro`.
 
-| Kolom       | Tipe Data    | Keterangan                            |
-| ----------- | ------------ | ------------------------------------- |
-| defect_id   | SERIAL       | Primary Key                           |
-| nama_defect | VARCHAR(100) | Nama jenis defect (unik, wajib diisi) |
+**Login** (akun dari `database/dummy.sql`): username `operasional`, password `operasional123`.
+Ganti sebelum dipakai di lini.
 
-### 7. detail_defect
+### 4. Perangkat ESP32
 
-Tabel untuk menyimpan rincian kecacatan pada setiap catatan produksi harian.
-
-| Kolom         | Tipe Data | Keterangan                                                               |
-| ------------- | --------- | ------------------------------------------------------------------------ |
-| detail_id     | SERIAL    | Primary Key                                                              |
-| produksi_id   | INT       | Foreign Key ke `produksi_harian(produksi_id)` dengan `ON DELETE CASCADE` |
-| defect_id     | INT       | Foreign Key ke `tipe_defect(defect_id)`                                  |
-| jumlah_defect | INT       | Jumlah produk dengan jenis defect tertentu (wajib diisi, minimal 0)      |
-
-### 8. sessions
-
-Tabel untuk menyimpan data sesi login pengguna.
-
-| Kolom      | Tipe Data    | Keterangan                            |
-| ---------- | ------------ | ------------------------------------- |
-| session_id | VARCHAR(255) | Primary Key                           |
-| user_id    | INT          | Foreign Key ke `users(user_id)`       |
-| login_time | TIMESTAMP    | Waktu login (default: waktu saat ini) |
-| is_active  | BOOLEAN      | Status sesi aktif (default: TRUE)     |
+Lihat [`firmware/README.md`](firmware/README.md): flash, Wi-Fi, alamat server
+(`set server http://<IP komputer server>:8000/api/v1`), arah sensor (`irlevel`), pencahayaan dan kamera.
+Perangkat dan komputer server harus berada di jaringan Wi-Fi yang sama.
 
 ---
 
-## Catatan Pengembangan
+## Alur pemakaian
 
-- Aplikasi ini menggunakan arsitektur berbasis Model-View-Controller (MVC) untuk memisahkan logika bisnis, antarmuka pengguna, dan pengontrol alur kerja.
-- Semua koneksi ke basis data dikelola melalui kelas singleton `Database` yang terdapat pada modul `src/database/db_connection.py` untuk memastikan efisiensi koneksi.
-- Data dummy yang disediakan mencakup periode Januari hingga April 2025 untuk keperluan pengujian dan demonstrasi fitur dashboard.
+1. **Produk**: daftarkan SKU dan harga satuan (dipakai untuk estimasi kerugian). Ambang batas dan versi
+   model terisi otomatis setelah server memuat model PatchCore untuk SKU itu.
+2. **Batch**: buat batch (format `B-YYMM-NN`, contoh `B-2611-01`). Perangkat otomatis mengikuti batch yang
+   sedang berjalan (paling baru) dalam 5 detik; kode batch tidak perlu diketik di perangkat.
+3. Letakkan kaleng di depan sensor dan **biarkan sampai LED bereaksi** (sekitar 2 detik).
+4. **Dashboard** diperbarui setiap 5 detik. Halaman lain punya tombol ⟳ (Muat ulang data) di kanan atas.
+5. **Alert** menampilkan kaleng NG; **Riwayat** menampilkan foto setiap kaleng (OK dan NG) per batch.
+6. **Kejadian**: catat kejadian manual (bahan baku habis, alat berhenti, atau jenis yang diketik sendiri).
+   REJECT dicatat otomatis oleh AI.
+7. **Laporan**: laporan per batch dan rekap per tanggal, bisa diekspor ke PDF.
+8. **Tutup batch** menghitung status akhir: PASSED bila NG paling banyak 5%, selain itu HOLD.
+
+Setiap inspeksi menyimpan ambang dan versi model yang dipakai saat itu, jadi mengubah ambang tidak
+mengubah putusan kaleng yang sudah diperiksa.
 
 ---
 
-## Fitur Bonus yang Diimplementasikan
+## Masalah umum
 
-Aplikasi ini telah mengimplementasikan seluruh poin bonus yang diminta dalam spesifikasi:
+| Gejala | Penyebab dan solusi |
+|---|---|
+| Login: "Server SiMonPro tidak dapat dihubungi" | Server belum berjalan atau alamat salah. Jalankan langkah 2 dan cek `/api/v1/health`; atur `SIMONPRO_API_URL` bila server di komputer lain. |
+| Login berhasil tetapi muncul "Gagal membuka aplikasi" | Pesan menyebutkan penyebabnya. Pastikan kode terbaru (`git pull`), server terbaru (restart setelah pull), dan migrasi database sudah dijalankan. |
+| `IndexError` di `kejadian.py` setelah login | Versi lama tidak bisa dibuka pada database tanpa batch. Sudah diperbaiki; `git pull`. |
+| `qt.qpa.windowclass: Failed to register window class ... Class already exists` | Peringatan Qt di Windows, tidak berbahaya. |
+| PowerShell: "The command main.py was not found" | Jalankan `uv run python main.py`. |
+| Server: `ModuleNotFoundError: torch` / `fastapi` | Dependensi server terhapus oleh `uv sync` tanpa grup. Ulangi `uv sync --group server --group ml-cpu`. |
+| Linux (Nix): `libstdc++.so.6: cannot open shared object file` saat impor numpy | `.venv` dibuat dari Python Nix. Buat ulang: `rm -rf .venv && uv sync --python-preference only-managed ...`. |
+| Semua kaleng NG dengan skor 1,00 | Foto tidak mirip data latih: cahaya, white balance, posisi kamera atau kaleng berubah. Lihat `firmware/README.md` (bagian kamera) dan [`server/README.md`](server/README.md). |
 
-### 1. Unit Testing (Bonus)
+---
 
-- **Framework**: `pytest`
-- **Cakupan**: Mencakup seluruh layer Service dan Controller.
-- **Lokasi**: Folder `tests/`
-- **Cara Menjalankan**:
-  ```bash
-  xvfb-run -a uv run pytest tests/ -v
-  ```
-- **Catatan**: Seluruh logika bisnis pada `LaporanService`, `ProdukService`, dan `AuthService` telah diuji secara menyeluruh.
+## Halaman aplikasi
 
-### 2. Performance Optimization (Bonus)
+| Halaman | Isi |
+|---|---|
+| Login | Autentikasi ke server (token sesi, berlaku 12 jam). |
+| Dashboard | Batch aktif, output hari ini, OK/NG, grafik output per jam, alert terbaru; diperbarui setiap 5 detik. |
+| Produk | Daftar SKU, harga, ambang batas dan versi model; ketersediaan kaleng OK hari ini. |
+| Batch | Daftar batch dengan filter, buat batch, tutup batch, ekspor PDF. |
+| Alert | Kaleng NG terbaru dengan foto dan skor anomali, per rentang waktu. |
+| Laporan | Laporan inspeksi per batch dan rekap produksi per tanggal (PDF). |
+| Kejadian | Kejadian produksi per batch; catat kejadian manual. |
+| Riwayat | Folder foto per batch berisi setiap kaleng yang diperiksa (OK dan NG). |
 
-- **Tool**: `cProfile`
-- **Fitur yang Dioptimasi**: Dashboard Monitoring dan Generasi Laporan.
-- **Hasil**: Laporan performa tersedia di `doc/performance_report.txt`.
-- **Identifikasi**: Database query diidentifikasi sebagai komponen paling memakan waktu, sehingga penggunaan singleton database connection dioptimalkan untuk meminimalkan overhead.
-- **Cara Menjalankan Profiling**:
-  ```bash
-  PYTHONPATH=. uv run python scripts/profile_dashboard.py
-  ```
+---
 
-### 3. CI/CD (Bonus)
+## Tabel basis data
 
-- **Tool**: GitHub Actions
-- **Workflow**: `.github/workflows/ci.yml`
-- **Otomatisasi**:
-  - **Linting**: Pengecekan kualitas kode otomatis dengan `Ruff`.
-  - **Testing**: Menjalankan seluruh test suite pada setiap Pull Request dan Push ke branch utama.
-  - **Delivery**: Otomatis membuat paket rilis (`.zip`) dan checksum (`.sha256`) setiap kali ada tag versi baru (`v*`).
+Skema lengkap: [`database/init.sql`](database/init.sql). Data awal: [`database/dummy.sql`](database/dummy.sql).
 
-## Changes
-### 1. UI
-- pop up berhasil login
-- fitur target produk
-- HTML untuk template laporan
+| Tabel | Isi |
+|---|---|
+| `pengguna` | Akun aplikasi (password disimpan sebagai hash bcrypt). |
+| `sesi` | Token login (hash), waktu kedaluwarsa, status aktif. |
+| `perangkat` | Perangkat ESP32 dan hash API key-nya (header `X-Device-Key`). |
+| `produk` | SKU, nama, harga satuan, versi model dan ambang batas PatchCore. |
+| `batch` | Kode batch, SKU, status batch (BERJALAN/DITUTUP), status inspeksi (PASSED/HOLD), waktu mulai/selesai. |
+| `output_produksi` | Jumlah kaleng yang terhitung sensor per kiriman perangkat. |
+| `inspeksi` | Hasil tiap kaleng: OK/NG, skor anomali, skor mentah, ambang dan versi model yang dipakai, lokasi foto, latensi. |
+| `kejadian_produksi` | REJECT (AI), RATE_DROP (sensor), kejadian manual operator (jenis bebas, huruf besar). |
 
-### 2 Logic
-- fitur edit produk
-- fitur target produk
+---
+
+## Pengujian
+
+Tes server menghapus dan membuat ulang schema `public`, jadi selalu memakai database terpisah
+`simonpro_test` (dibuat otomatis oleh `docker compose` pada volume baru; tes menolak nama database
+yang tidak berakhiran `_test`).
+
+```bash
+uv sync --group server --group ml-cpu --group dev
+uv run pytest                                   # server/tests + tests (aplikasi desktop)
+uv run ruff check src server ml tools
+```
+
+Volume database lama: buat sekali `docker compose exec postgres psql -U postgres -c "CREATE DATABASE simonpro_test;"`.
+
+CI (GitHub Actions, `.github/workflows/ci.yml`) menjalankan lint dan tes pada setiap push dan pull request.
+
+---
+
+## Dokumen lain
+
+- [`server/README.md`](server/README.md): server, model PatchCore, CPU/GPU, alur dataset dan pelatihan.
+- [`firmware/README.md`](firmware/README.md): perakitan, pengaturan perangkat, kamera, sensor, pemecahan masalah.
+- [`doc/IMPLEMENTATION_PLAN.md`](doc/IMPLEMENTATION_PLAN.md): rencana implementasi dan keputusan desain.
+- [`doc/model_eval/`](doc/model_eval/): laporan evaluasi tiap versi model.
