@@ -63,6 +63,10 @@ Untuk instalasi otomatis (Python, Docker, dependensi menggunakan **uv**, dan sho
 
    _(Opsional: Jika tidak menggunakan uv, gunakan `pip install -r requirements.txt`)_
 
+   Server inspeksi (FastAPI + PatchCore) **mendukung CPU maupun GPU NVIDIA**. Pilih salah satu:
+   `uv sync --group server --group ml` (GPU, CUDA) atau `uv sync --group server --group ml-cpu`
+   (hanya CPU, unduhan jauh lebih kecil). Detail: [`server/README.md`](server/README.md#cpu-or-gpu).
+
 4. **Konfigurasi koneksi basis data (opsional)**
 
    Secara default, aplikasi terhubung ke basis data dengan konfigurasi berikut:
