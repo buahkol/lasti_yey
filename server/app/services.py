@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import io
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 
 from fastapi import HTTPException, status
@@ -19,19 +19,34 @@ def compute_inspection_status(batch_status: str, total: int, ng: int, tolerance:
     return "PASSED" if ng / total <= tolerance else "HOLD"
 
 
-def get_batch(conn: PgConnection, batch_code: str, for_update: bool = False) -> dict | None:
+def today_local(conn: PgConnection) -> date:
+    """Today's date in the DB session time zone (Asia/Jakarta), not the OS time zone of the server."""
+    with conn.cursor() as cur:
+        cur.execute("SELECT current_date AS d")
+        return cur.fetchone()["d"]
+
+
+def get_batch(conn: PgConnection, batch_code: str, for_update: bool = False,
+              for_share: bool = False) -> dict | None:
     sql = """SELECT b.*, p.nama AS nama_produk, p.harga_satuan
              FROM batch b JOIN produk p ON p.sku = b.sku WHERE b.kode_batch = %s"""
     if for_update:
         sql += " FOR UPDATE OF b"
+    elif for_share:
+        sql += " FOR SHARE OF b"
     with conn.cursor() as cur:
         cur.execute(sql, (batch_code,))
         return cur.fetchone()
 
 
-def require_open_batch(conn: PgConnection, batch_code: str) -> dict:
-    """400 for unknown or closed batches (FR-06, FR-09)."""
-    batch = get_batch(conn, batch_code)
+def require_open_batch(conn: PgConnection, batch_code: str, lock: bool = False) -> dict:
+    """400 for unknown or closed batches (FR-06, FR-09).
+
+    ``lock=True`` takes a shared row lock until the transaction ends. Closing a batch
+    needs an exclusive lock, so a write that passed this check cannot race with the
+    close: the close waits for it (and then counts it), or the write waits and is refused.
+    """
+    batch = get_batch(conn, batch_code, for_share=lock)
     if batch is None:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Kode batch {batch_code} tidak terdaftar")
     if batch["status_batch"] != "BERJALAN":

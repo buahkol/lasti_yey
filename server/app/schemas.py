@@ -205,29 +205,7 @@ class BatchStatusList(ApiModel):
     batches: list[BatchStatusRow]
 
 
-# ---- 9. POST /shipments ---------------------------------------------------- #
-class ShipmentIn(ApiModel):
-    order_id: str = Field(min_length=1, max_length=50)
-    batch_codes: list[str] = Field(min_length=1)
-    quantity: int = Field(gt=0)
-
-
-class ShipmentCreated(ApiModel):
-    shipment_id: int
-    order_id: str
-    batch_codes: list[str]
-    status: str = "recorded"
-
-
-class ShipmentOut(ApiModel):
-    shipment_id: int
-    order_id: str
-    batch_codes: list[str]
-    quantity: int
-    created_at: datetime
-
-
-# ---- 10. GET /batches/{batchCode}/inspections ------------------------------ #
+# ---- 9. GET /batches/{batchCode}/inspections ------------------------------ #
 class InspectionRow(ApiModel):
     inspection_id: int
     result: Result

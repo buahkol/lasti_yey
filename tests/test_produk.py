@@ -18,6 +18,9 @@ from src.database.db_connection import get_db, test_connection
 from src.models.Produk import Produk
 from src.services.ProdukService import ProdukService
 
+pytestmark = pytest.mark.legacy_schema
+
+
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------

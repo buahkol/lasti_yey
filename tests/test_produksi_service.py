@@ -1,5 +1,7 @@
 from datetime import date
 
+import pytest
+
 from src.database.db_connection import get_db
 from src.services.ProduksiService import ProduksiService
 
@@ -39,6 +41,7 @@ def test_validasi_menolak_penanggung_jawab_kosong():
     assert message == "Penanggung jawab wajib diisi"
 
 
+@pytest.mark.legacy_schema
 def test_input_produksi_harian_menyimpan_detail_defect():
     db = get_db()
     service = ProduksiService(db=db)

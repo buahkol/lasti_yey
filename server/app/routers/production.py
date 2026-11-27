@@ -19,7 +19,7 @@ from ..schemas import (
     OutputOut,
     ProductionReport,
 )
-from ..services import get_batch, require_open_batch
+from ..services import get_batch, require_open_batch, today_local
 
 router = APIRouter(prefix="/production", tags=["production"])
 
@@ -27,7 +27,7 @@ router = APIRouter(prefix="/production", tags=["production"])
 @router.post("/outputs", response_model=OutputOut, status_code=status.HTTP_201_CREATED)
 def record_output(body: OutputIn, _: Principal = Depends(require_device),
                   conn: PgConnection = Depends(get_conn)):
-    require_open_batch(conn, body.batch_code)
+    require_open_batch(conn, body.batch_code, lock=True)
     with conn.cursor() as cur:
         cur.execute("INSERT INTO output_produksi (kode_batch, jumlah, waktu) VALUES (%s, %s, %s)",
                     (body.batch_code, body.quantity, body.timestamp))
@@ -66,8 +66,8 @@ def list_events(batch_code: str | None = Query(default=None, alias="batchCode"),
         where.append("kode_batch = %s")
         params.append(batch_code)
     if date_:
-        where.append("waktu::date = %s")
-        params.append(date_)
+        where.append("waktu >= %s AND waktu < %s + 1")
+        params.extend([date_, date_])
     if event_type:
         where.append("jenis = %s")
         params.append(event_type.value)
@@ -84,15 +84,17 @@ def production_report(batch_code: str | None = Query(default=None, alias="batchC
                       date_: date | None = Query(default=None, alias="date"),
                       conn: PgConnection = Depends(get_conn)):
     """Per-batch recap. Without batchCode: every batch active on the date (started, or had data)."""
-    day = date_ or date.today()
+    day = date_ or today_local(conn)
     if batch_code:
         cond, params = "b.kode_batch = %s", [batch_code]
     else:
-        cond = """(b.mulai::date = %s
-                   OR EXISTS (SELECT 1 FROM inspeksi x WHERE x.kode_batch = b.kode_batch AND x.waktu::date = %s)
-                   OR EXISTS (SELECT 1 FROM output_produksi y
-                              WHERE y.kode_batch = b.kode_batch AND y.waktu::date = %s))"""
-        params = [day, day, day]
+        # Date ranges (not ``col::date``) so the (kode_batch, waktu) indexes stay usable (NF-02).
+        cond = """((b.mulai >= %s AND b.mulai < %s + 1)
+                   OR EXISTS (SELECT 1 FROM inspeksi x WHERE x.kode_batch = b.kode_batch
+                              AND x.waktu >= %s AND x.waktu < %s + 1)
+                   OR EXISTS (SELECT 1 FROM output_produksi y WHERE y.kode_batch = b.kode_batch
+                              AND y.waktu >= %s AND y.waktu < %s + 1))"""
+        params = [day] * 6
     sql = f"""
         SELECT b.kode_batch,
                COALESCE((SELECT sum(jumlah) FROM output_produksi o WHERE o.kode_batch = b.kode_batch), 0) AS total_output,

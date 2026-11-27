@@ -128,18 +128,46 @@ class Database:
     # ------------------------------------------------------------------
     # Convenience API
     # ------------------------------------------------------------------
+    def _rollback_quietly(self) -> None:
+        """Roll back the open transaction, ignoring errors from a dead connection."""
+        try:
+            if self._connection is not None and not self._connection.closed:
+                self._connection.rollback()
+        except psycopg2.Error:  # pragma: no cover - connection already unusable
+            logger.warning("Rollback failed; connection will be reopened on next use.")
+            self.close()
+
+    def _run(self, action, sql: str, params, many: bool = False):
+        """Execute ``sql`` and hand the cursor to ``action``.
+
+        A failed statement leaves a PostgreSQL transaction in the *aborted* state, and every
+        later statement on that connection then fails with "current transaction is aborted".
+        The singleton connection is shared for the whole process, so one bad query used to
+        poison every following one. On error we roll back (unless the caller owns the
+        transaction through ``with db:``, which rolls back in ``__exit__``) and re-raise.
+        """
+        try:
+            with self.connection.cursor() as cursor:
+                if many:
+                    cursor.executemany(sql, params)
+                else:
+                    cursor.execute(sql, params)
+                result = action(cursor)
+            if not self._in_context:
+                self.connection.commit()
+            return result
+        except psycopg2.Error:
+            if not self._in_context:
+                self._rollback_quietly()
+            raise
+
     def execute_query(
         self,
         sql: str,
         params: tuple | list | dict | None = None,
     ) -> list[dict[str, Any]]:
         """Run a SELECT-style query and return a list of dict rows."""
-        with self.connection.cursor() as cursor:
-            cursor.execute(sql, params)
-            rows = cursor.fetchall()  # type: ignore[return-value]
-            if not self._in_context:
-                self.connection.commit()
-            return rows
+        return self._run(lambda cursor: cursor.fetchall(), sql, params)
 
     def execute_update(
         self,
@@ -147,11 +175,7 @@ class Database:
         params: tuple | list | dict | None = None,
     ) -> int:
         """Run an INSERT/UPDATE/DELETE and return the number of rows affected."""
-        with self.connection.cursor() as cursor:
-            cursor.execute(sql, params)
-            if not self._in_context:
-                self.connection.commit()
-            return cursor.rowcount
+        return self._run(lambda cursor: cursor.rowcount, sql, params)
 
     def execute_many(
         self,
@@ -159,11 +183,7 @@ class Database:
         params_list: list[tuple],
     ) -> int:
         """Run ``executemany`` and return total rows affected."""
-        with self.connection.cursor() as cursor:
-            cursor.executemany(sql, params_list)
-            if not self._in_context:
-                self.connection.commit()
-            return cursor.rowcount
+        return self._run(lambda cursor: cursor.rowcount, sql, params_list, many=True)
 
     # ------------------------------------------------------------------
     # Context-manager support
@@ -205,3 +225,7 @@ def test_connection(**kwargs: Any) -> bool:
     finally:
         db.close()
         Database._instance = None
+
+
+# Not a test: stops pytest from collecting this helper when a test module imports it by name.
+test_connection.__test__ = False  # type: ignore[attr-defined]
