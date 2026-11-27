@@ -52,7 +52,7 @@ capture mode, green flash = OK, red 2 s = reject (NG), red 5 Hz blink = error (F
 1. Flash. With no Wi-Fi set, the board opens the access point **SiMonPro-Setup**: join it and open
    `http://192.168.4.1/`. Or over serial: `set ssid ...`, `set pass ...`, `wifi`.
 2. Point it at the server (see the network section below): `set server http://<server LAN IP>:8000/api/v1`.
-3. `batch <code>` with a batch that exists in the app (e.g. `B-2311-01`, product DEMO-CAN).
+3. Create a batch in the app. The device follows it by itself (`autobatch`, see Inspection).
 4. Open `http://<esp-ip>/` (or `http://simonpro.local/`) from a device on the same Wi-Fi. The live photo
    at the bottom is for aligning the camera and lighting. Lower **Exposure** (`aec`, try 80 then 40) until
    the label is clearly visible, keep **Gain** (`agc`) at 0–2, then **keep both fixed** for capture and inspection.
@@ -88,9 +88,16 @@ Start the server on endeavour (see `server/README.md`) and check `GET /api/v1/he
 
 ## Inspection (MODE inspect)
 
-Create and open the batch in the app, then `batch B-2311-01`. Each can: IR → settle (200 ms) → photo
-→ `POST /inspections` → LED. Every 10 cans or 30 s the count goes to `/production/outputs`
-(kept in NVS if the server is down). Before changing batch, pending outputs are flushed.
+Create the batch in the app; that is all. In inspect mode the device asks the server every 5 s which
+batch is running (`GET /devices/current-batch`, the newest one) and switches to it, logging
+`[batch] following the app: B-2611-01 -> B-2611-02`. Closing the batch in the app leaves the device with
+no batch: cans then blink the error LED until a new batch is opened. `set autobatch off` turns this off;
+then set the batch by hand with `batch <code>` (with `autobatch on`, a hand-set batch is overridden).
+
+Each can: IR → settle (`settle` ms) → photo → `POST /inspections` → LED. Every 10 cans or 30 s the count
+goes to `/production/outputs` (kept in NVS if the server is down). Before changing batch, pending
+outputs are sent to the old batch; if the server refuses them because that batch is closed, they are
+dropped (`[batch] old batch … refused N counted can(s); dropped`).
 Serial log prints the K4 timings for each can (trigger → LED), e.g.
 
 ```

@@ -234,6 +234,12 @@ class InspectionHistory(ApiModel):
     inspections: list[InspectionRow]
 
 
+class CurrentBatchOut(ApiModel):
+    """GET /devices/current-batch: where the device sends cans (null when no batch runs)."""
+    batch_code: str | None = None
+    sku: str | None = None
+
+
 class HealthOut(ApiModel):
     status: str
     model_backend: str

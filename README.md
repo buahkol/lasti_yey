@@ -134,8 +134,8 @@ kejadian, laporan) diambil dari server lewat REST API `/api/v1`.
 
    - **Produk**: daftarkan SKU dan harga satuan (dipakai untuk estimasi kerugian). Ambang batas dan versi
      model terisi otomatis setelah server memuat model PatchCore untuk SKU tersebut.
-   - **Batch**: buat batch (format `B-YYMM-NN`, contoh `B-2611-01`), lalu arahkan perangkat ke batch itu
-     dengan perintah serial `batch B-2611-01` (lihat `firmware/README.md`).
+   - **Batch**: buat batch (format `B-YYMM-NN`, contoh `B-2611-01`). Perangkat otomatis mengikuti batch
+     yang sedang berjalan (paling baru) dalam 5 detik; tidak perlu mengetik kode batch di perangkat.
    - **Dashboard** diperbarui setiap 5 detik: output, OK/NG, grafik per jam, dan alert terbaru.
    - **Alert** dan **Riwayat** menampilkan foto asli dari kamera untuk setiap kaleng yang diperiksa.
    - **Kejadian**: catat kejadian manual (bahan baku habis, alat berhenti, atau jenis yang diketik sendiri).

@@ -17,7 +17,7 @@ from fastapi.responses import JSONResponse
 from .config import Settings, get_settings
 from .db import Database
 from .ml.inspector import BaseInspector, PatchCoreInspector, StubInspector
-from .routers import auth, batches, dev, inspections, production, products
+from .routers import auth, batches, dev, devices, inspections, production, products
 from .schemas import HealthOut
 
 API_PREFIX = "/api/v1"
@@ -88,7 +88,7 @@ def create_app(settings: Settings | None = None, inspector: BaseInspector | None
 
     api = APIRouter(prefix=API_PREFIX)
     for r in (auth.router, products.router, batches.router, production.router,
-              inspections.router, dev.router):
+              inspections.router, dev.router, devices.router):
         api.include_router(r)
 
     @api.get("/health", response_model=HealthOut, tags=["meta"])

@@ -142,3 +142,16 @@ def test_batch_list_filters(client, user):
 @pytest.mark.parametrize("path", ["/inspections/alerts", "/production/reports", "/batches"])
 def test_read_endpoints_return_401_without_token(client, path):
     assert client.get(f"{API}{path}").status_code == 401
+
+
+def test_device_follows_the_newest_running_batch(client, user, device):
+    """GET /devices/current-batch: the device follows what the operator opens and closes in the app."""
+    url = f"{API}/devices/current-batch"
+    assert client.get(url).status_code == 401                       # device key required
+    assert client.get(url, headers=device).json() == {"batchCode": None, "sku": None}
+    make_batch(client, user, "B-DEV-1")
+    make_batch(client, user, "B-DEV-2", sku="SRD-CABAI-155G")
+    assert client.get(url, headers=device).json() == {"batchCode": "B-DEV-2", "sku": "SRD-CABAI-155G"}
+    assert client.get(url, params={"sku": "SRD-TOMAT-155G"}, headers=device).json()["batchCode"] == "B-DEV-1"
+    client.post(f"{API}/batches/B-DEV-2/close", headers=user)
+    assert client.get(url, headers=device).json()["batchCode"] == "B-DEV-1"

@@ -58,6 +58,7 @@ struct Config {
   int aec, agc, settleMs;
   int irLevel;  // 0 = sensor OUT is LOW while it sees a can, 1 = HIGH
   int rgbOn;    // onboard RGB status LED; off keeps its light out of the photo
+  int autoBatch;  // inspect mode: follow the running batch from the app (GET /devices/current-batch)
 } cfg;
 
 Preferences prefs;
@@ -86,6 +87,7 @@ void loadConfig() {
   cfg.settleMs = prefs.getInt("settle", 200);
   cfg.irLevel = prefs.getInt("irlevel", PIN_IR_ACTIVE_LEVEL == HIGH ? 1 : 0);
   cfg.rgbOn = prefs.getInt("rgb", 1);
+  cfg.autoBatch = prefs.getInt("autobatch", 1);
   pending = prefs.getUInt("pending", 0);
   prefs.end();
   while (cfg.server.endsWith("/")) cfg.server.remove(cfg.server.length() - 1);
@@ -107,6 +109,7 @@ void saveConfig() {
   prefs.putInt("settle", cfg.settleMs);
   prefs.putInt("irlevel", cfg.irLevel);
   prefs.putInt("rgb", cfg.rgbOn);
+  prefs.putInt("autobatch", cfg.autoBatch);
   prefs.end();
 }
 
@@ -322,6 +325,18 @@ int postJson(const String &path, const String &json, String &body) {
   return code;
 }
 
+int getJson(const String &path, String &body, uint32_t timeoutMs = HTTP_TIMEOUT_MS) {
+  HTTPClient http;
+  http.setConnectTimeout(min(timeoutMs, (uint32_t)3000));
+  http.setTimeout(timeoutMs);
+  if (!http.begin(cfg.server + path)) return -1;
+  http.addHeader("X-Device-Key", cfg.key);
+  int code = http.GET();
+  body = code > 0 ? http.getString() : http.errorToString(code);
+  http.end();
+  return code;
+}
+
 String shortBody(const String &b) { return b.length() > 200 ? b.substring(0, 200) + "..." : b; }
 
 // ---------------------------------------------------------------- output counting (FR-08)
@@ -346,6 +361,40 @@ bool flushOutputs(bool force) {
   }
   Serial.printf("[out] failed (%d) %s, keeping %u pending\n", code, shortBody(body).c_str(), pending);
   return false;
+}
+
+// ---------------------------------------------------------------- batch follower
+// The operator opens and closes batches in the desktop app; in inspect mode the device asks the server
+// which batch is running and switches to it (`set autobatch off` to set the batch by hand instead).
+static const uint32_t AUTO_BATCH_MS = 5000;
+
+void switchBatch(const String &code) {
+  if (pending) {
+    flushOutputs(true);  // counted cans belong to the old batch
+    if (pending) {       // server answered but refused: the old batch is closed, its cans cannot be added
+      Serial.printf("[batch] old batch %s refused %u counted can(s); dropped\n", cfg.batch.c_str(), pending);
+      pending = 0;
+      savePending();
+    }
+  }
+  Serial.printf("[batch] following the app: %s -> %s\n", cfg.batch.isEmpty() ? "(none)" : cfg.batch.c_str(),
+                code.isEmpty() ? "(none running)" : code.c_str());
+  cfg.batch = code;
+  saveConfig();
+}
+
+void batchTick() {
+  static uint32_t last = 0;
+  if (!cfg.autoBatch || cfg.mode != MODE_INSPECT || apMode || WiFi.status() != WL_CONNECTED) return;
+  if (millis() - last < AUTO_BATCH_MS) return;
+  last = millis();
+  String body;
+  int code = getJson("/devices/current-batch", body, 2000);  // short: the sensor loop waits meanwhile
+  if (code != 200) return;  // server down or old server: keep the current batch
+  JsonDocument r;
+  if (deserializeJson(r, body)) return;
+  String running = r["batchCode"].isNull() ? String("") : String((const char *)r["batchCode"]);
+  if (running != cfg.batch) switchBatch(running);
 }
 
 // ---------------------------------------------------------------- one can
@@ -553,6 +602,13 @@ String setKey(String k, const String &v) {
     applyIrPin();
     irState = IR_WAIT_RELEASE;  // wait for "no can" under the new meaning before counting
   }
+  else if (k == "autobatch") {
+    String lv = v;
+    lv.toLowerCase();
+    if (lv == "on" || lv == "1") cfg.autoBatch = 1;
+    else if (lv == "off" || lv == "0") cfg.autoBatch = 0;
+    else return "autobatch must be on or off";
+  }
   else if (k == "rgb") {
     String lv = v;
     lv.toLowerCase();
@@ -582,9 +638,9 @@ void printStatus(Print &out) {
   out.printf("wifi=%s ip=%s server=%s time=%s\n", cfg.ssid.c_str(),
              apMode ? WiFi.softAPIP().toString().c_str() : WiFi.localIP().toString().c_str(), cfg.server.c_str(),
              timeValid() ? isoNow().c_str() : "not synced");
-  out.printf("sensor GPIO%d=%d (%s) irlevel=%s rgb=%s\n", PIN_IR_SENSOR, digitalRead(PIN_IR_SENSOR),
+  out.printf("sensor GPIO%d=%d (%s) irlevel=%s rgb=%s autobatch=%s\n", PIN_IR_SENSOR, digitalRead(PIN_IR_SENSOR),
              digitalRead(PIN_IR_SENSOR) == (cfg.irLevel ? HIGH : LOW) ? "detect" : "clear", cfg.irLevel ? "high" : "low",
-             cfg.rgbOn ? "on" : "off");
+             cfg.rgbOn ? "on" : "off", cfg.autoBatch ? "on" : "off");
   out.printf("camera=%s aec=%d agc=%d settle=%dms | capture: sku=%s label=%s can=%s | psram free %u\n",
              cameraOk ? "ok" : "FAIL", cfg.aec, cfg.agc, cfg.settleMs, cfg.sku.c_str(), cfg.label.c_str(),
              cfg.canId.c_str(), ESP.getFreePsram());
@@ -606,6 +662,7 @@ void handleCommand(String line) {
         "pir (toggle raw sensor GPIO log) | camera (restart camera, re-lock white balance on the current scene)\n"
         "set <key> <value>  keys: ssid pass server key batch mode(inspect|capture) sku label(ok|ng) can aec agc settle\n"
         "                   irlevel(low|high: sensor OUT level while it sees a can) rgb(on|off: onboard LED)\n"
+        "                   autobatch(on|off: follow the batch running in the app)\n"
         "mode inspect|capture | batch <code> | label ok|ng | can <id>");
   } else if (cmd == "status") printStatus(Serial);
   else if (cmd == "snap") onCan();
@@ -689,6 +746,7 @@ void handleRoot() {
   s += inputRow("Jeda sebelum foto (ms)", "settle", String(cfg.settleMs), "number");
   s += inputRow("Level sensor saat ada kaleng (low/high)", "irlevel", cfg.irLevel ? "high" : "low", "text");
   s += inputRow("LED RGB di board (on/off)", "rgb", cfg.rgbOn ? "on" : "off", "text");
+  s += inputRow("Ikuti batch dari aplikasi (on/off)", "autobatch", cfg.autoBatch ? "on" : "off", "text");
   s += inputRow("Server URL", "server", cfg.server);
   s += inputRow("Device key", "key", cfg.key, "password");
   s += inputRow("Wi-Fi SSID", "ssid", cfg.ssid);
@@ -708,7 +766,7 @@ void redirect(const String &msg) {
 }
 
 void handleSave() {
-  const char *keys[] = {"batch", "mode", "sku", "label", "can", "aec", "agc", "settle", "irlevel", "rgb", "server", "key", "ssid", "pass"};
+  const char *keys[] = {"batch", "mode", "sku", "label", "can", "aec", "agc", "settle", "irlevel", "rgb", "autobatch", "server", "key", "ssid", "pass"};
   String errs;
   String oldSsid = cfg.ssid, oldPass = cfg.pass;
   for (const char *k : keys) {
@@ -774,5 +832,6 @@ void loop() {
   irTick();
   ledTick();
   flushOutputs(false);
+  batchTick();
   delay(2);
 }
