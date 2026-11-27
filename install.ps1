@@ -77,6 +77,7 @@ function Ensure-Shortcut {
   $shortcut.TargetPath = $TargetPath
   $shortcut.Arguments = $Arguments
   $shortcut.WorkingDirectory = $WorkingDir
+  $shortcut.WindowStyle = 7  # start minimized so the PowerShell console doesn't flash
   if ($IconPath -and (Test-Path $IconPath)) {
     $shortcut.IconLocation = $IconPath
   }
@@ -91,16 +92,17 @@ Ensure-Docker
 
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $launcherPath = Join-Path $scriptDir "run-simonpro.ps1"
-@"
-
+# Single-quoted here-string: the launcher's variables must be written
+# literally, not expanded while install.ps1 runs.
+@'
 $ErrorActionPreference = "Stop"
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $ScriptDir
 uv run python main.py
-"@ | Set-Content -Path $launcherPath -Encoding UTF8
+'@ | Set-Content -Path $launcherPath -Encoding UTF8
 
 $iconPath = Join-Path $scriptDir "img\Logo Simonpro Biru.png"
-Ensure-Shortcut -AppName "SiMonPro" -TargetPath "powershell.exe" -Arguments "-ExecutionPolicy Bypass -File `"$launcherPath`"" -WorkingDir $scriptDir -IconPath $iconPath
+Ensure-Shortcut -AppName "SiMonPro" -TargetPath "powershell.exe" -Arguments "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$launcherPath`"" -WorkingDir $scriptDir -IconPath $iconPath
 
 if ($WithTestDeps) {
   Write-Log "Headless test deps are handled in CI on Linux. No extra Windows packages required."
