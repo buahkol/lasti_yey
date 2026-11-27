@@ -30,6 +30,12 @@ def get_database(request: Request) -> Database:
 
 
 def get_conn(db: Database = Depends(get_database)) -> Iterator[PgConnection]:
+    """One pooled connection per request, committed when the endpoint returns.
+
+    Always declare it as ``Depends(get_conn, scope="function")``: that runs the commit before the
+    response is sent. With the default scope the commit runs after it, so a client acting on the
+    response at once (a new login token, a batch just created) could find the row not yet committed.
+    """
     with db.connection() as conn:
         yield conn
 
@@ -95,7 +101,7 @@ def _user_from_bearer(authorization: str | None, conn: PgConnection) -> Principa
 
 def require_device(
     x_device_key: str | None = Security(device_key_scheme),
-    conn: PgConnection = Depends(get_conn),
+    conn: PgConnection = Depends(get_conn, scope="function"),
 ) -> Principal:
     p = _device_from_key(x_device_key, conn)
     if p is None:
@@ -105,7 +111,7 @@ def require_device(
 
 def require_user(
     creds: HTTPAuthorizationCredentials | None = Security(bearer_scheme),
-    conn: PgConnection = Depends(get_conn),
+    conn: PgConnection = Depends(get_conn, scope="function"),
 ) -> Principal:
     p = _user_from_bearer(_bearer_header(creds), conn)
     if p is None:
@@ -116,7 +122,7 @@ def require_user(
 def require_user_or_device(
     creds: HTTPAuthorizationCredentials | None = Security(bearer_scheme),
     x_device_key: str | None = Security(device_key_scheme),
-    conn: PgConnection = Depends(get_conn),
+    conn: PgConnection = Depends(get_conn, scope="function"),
 ) -> Principal:
     p = _user_from_bearer(_bearer_header(creds), conn) or _device_from_key(x_device_key, conn)
     if p is None:

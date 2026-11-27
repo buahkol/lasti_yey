@@ -14,10 +14,16 @@ class ApiModel(BaseModel):
 
 
 class EventType(str, Enum):
+    """Known event kinds. Operators may also record their own kind (UPPER_SNAKE, see EVENT_KIND)."""
     RATE_DROP = "RATE_DROP"
     REJECT = "REJECT"
     BAHAN_BAKU_HABIS = "BAHAN_BAKU_HABIS"
     ALAT_BERHENTI = "ALAT_BERHENTI"
+
+
+# REJECT and RATE_DROP come from the AI and the sensor; an operator can never record them.
+SYSTEM_EVENT_TYPES = {EventType.REJECT.value, EventType.RATE_DROP.value}
+EVENT_KIND = r"^[A-Z0-9_]{1,40}$"
 
 
 class EventSource(str, Enum):
@@ -116,7 +122,7 @@ class OutputOut(ApiModel):
 # ---- 2. POST /production/events -------------------------------------------- #
 class EventIn(ApiModel):
     batch_code: str
-    event_type: EventType
+    event_type: str = Field(pattern=EVENT_KIND)
     source: EventSource
     timestamp: datetime
     note: str | None = Field(default=None, max_length=500)
@@ -130,7 +136,7 @@ class EventCreated(ApiModel):
 class EventOut(ApiModel):
     event_id: int
     batch_code: str
-    event_type: EventType
+    event_type: str
     source: EventSource
     timestamp: datetime
     note: str | None = None

@@ -29,7 +29,7 @@ async def inspect_package(
     batch_code: str = Form(..., alias="batchCode"),
     timestamp: datetime = Form(...),
     _: Principal = Depends(require_device),
-    conn: PgConnection = Depends(get_conn),
+    conn: PgConnection = Depends(get_conn, scope="function"),
     inspector: BaseInspector = Depends(get_inspector),
     settings: Settings = Depends(get_settings_dep),
 ):
@@ -84,7 +84,7 @@ async def inspect_package(
 
 @router.get("/alerts", response_model=list[AlertOut], dependencies=[Depends(require_user)])
 def alerts(since: datetime | None = None, batch_code: str | None = Query(default=None, alias="batchCode"),
-           limit: int = Query(default=50, ge=1, le=500), conn: PgConnection = Depends(get_conn)):
+           limit: int = Query(default=50, ge=1, le=500), conn: PgConnection = Depends(get_conn, scope="function")):
     where, params = ["hasil = 'NG'"], []
     if since:
         where.append("waktu > %s")
@@ -105,7 +105,7 @@ def alerts(since: datetime | None = None, batch_code: str | None = Query(default
 
 @router.get("/reports/{batch_code}", response_model=BatchInspectionReport,
             dependencies=[Depends(require_user)])
-def batch_report(batch_code: str, conn: PgConnection = Depends(get_conn)):
+def batch_report(batch_code: str, conn: PgConnection = Depends(get_conn, scope="function")):
     batch = get_batch(conn, batch_code)
     if batch is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"Batch {batch_code} tidak ditemukan")
@@ -138,7 +138,7 @@ def _photo(inspection_id: int, size: str, conn: PgConnection, settings: Settings
 
 @router.get("/{inspection_id}/photo", response_class=FileResponse, dependencies=[Depends(require_user)])
 def photo(inspection_id: int, size: str = Query(default="full", pattern="^(full|thumb)$"),
-          conn: PgConnection = Depends(get_conn), settings: Settings = Depends(get_settings_dep)):
+          conn: PgConnection = Depends(get_conn, scope="function"), settings: Settings = Depends(get_settings_dep)):
     return _photo(inspection_id, size, conn, settings)
 
 
@@ -146,5 +146,5 @@ def photo(inspection_id: int, size: str = Query(default="full", pattern="^(full|
 @router.get("/{inspection_id}/image", response_class=FileResponse, include_in_schema=False,
             dependencies=[Depends(require_user)])
 def image_alias(inspection_id: int, size: str = Query(default="full", pattern="^(full|thumb)$"),
-                conn: PgConnection = Depends(get_conn), settings: Settings = Depends(get_settings_dep)):
+                conn: PgConnection = Depends(get_conn, scope="function"), settings: Settings = Depends(get_settings_dep)):
     return _photo(inspection_id, size, conn, settings)

@@ -21,14 +21,14 @@ def _row(r: dict) -> ProductOut:
 
 
 @router.get("", response_model=list[ProductOut])
-def list_products(conn: PgConnection = Depends(get_conn)):
+def list_products(conn: PgConnection = Depends(get_conn, scope="function")):
     with conn.cursor() as cur:
         cur.execute("SELECT * FROM produk ORDER BY sku")
         return [_row(r) for r in cur.fetchall()]
 
 
 @router.post("", response_model=ProductOut, status_code=status.HTTP_201_CREATED)
-def create_product(body: ProductIn, conn: PgConnection = Depends(get_conn)):
+def create_product(body: ProductIn, conn: PgConnection = Depends(get_conn, scope="function")):
     try:
         with conn.cursor() as cur:
             cur.execute("INSERT INTO produk (sku, nama, harga_satuan) VALUES (%s, %s, %s) RETURNING *",
@@ -41,7 +41,7 @@ def create_product(body: ProductIn, conn: PgConnection = Depends(get_conn)):
 
 
 @router.put("/{sku}", response_model=ProductOut)
-def update_product(sku: str, body: ProductUpdate, conn: PgConnection = Depends(get_conn)):
+def update_product(sku: str, body: ProductUpdate, conn: PgConnection = Depends(get_conn, scope="function")):
     with conn.cursor() as cur:
         cur.execute("UPDATE produk SET nama = %s, harga_satuan = %s WHERE sku = %s RETURNING *",
                     (body.name, body.unit_price, sku))
@@ -53,7 +53,7 @@ def update_product(sku: str, body: ProductUpdate, conn: PgConnection = Depends(g
 
 @router.get("/{sku}/availability", response_model=AvailabilityOut)
 def availability(sku: str, date_: date | None = Query(default=None, alias="date"),
-                 conn: PgConnection = Depends(get_conn)):
+                 conn: PgConnection = Depends(get_conn, scope="function")):
     """Cans that passed inspection for this product on the date."""
     day = date_ or today_local(conn)
     with conn.cursor() as cur:

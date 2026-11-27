@@ -97,10 +97,14 @@ def test_events(client, user):
         "timestamp": now_iso(), "note": "Stok kaleng kosong habis"})
     assert r.status_code == 201 and r.json()["status"] == "recorded" and r.json()["eventId"] > 0
     bad = client.post(f"{API}/production/events", headers=user, json={
-        "batchCode": "B-E", "eventType": "LAINNYA", "source": "OPERATOR", "timestamp": now_iso()})
-    assert bad.status_code == 400
+        "batchCode": "B-E", "eventType": "lain-lain", "source": "OPERATOR", "timestamp": now_iso()})
+    assert bad.status_code == 400  # kinds are UPPER_SNAKE
+    typed = client.post(f"{API}/production/events", headers=user, json={
+        "batchCode": "B-E", "eventType": "PEMADAMAN_LISTRIK", "source": "OPERATOR", "timestamp": now_iso()})
+    assert typed.status_code == 201  # operators may record a kind of their own
     events = client.get(f"{API}/production/events", params={"batchCode": "B-E"}, headers=user).json()
-    assert len(events) == 1 and events[0]["note"] == "Stok kaleng kosong habis"
+    assert [e["eventType"] for e in events] == ["PEMADAMAN_LISTRIK", "BAHAN_BAKU_HABIS"]
+    assert events[1]["note"] == "Stok kaleng kosong habis"
 
 
 # ---- 5. POST /inspections (FR-10..13, FR-16) ------------------------------- #

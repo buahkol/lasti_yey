@@ -17,7 +17,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 @router.post("/login", response_model=LoginResponse)
-def login(body: LoginRequest, conn: PgConnection = Depends(get_conn),
+def login(body: LoginRequest, conn: PgConnection = Depends(get_conn, scope="function"),
           settings: Settings = Depends(get_settings_dep)):
     with conn.cursor() as cur:
         cur.execute("SELECT id, username, nama, password_hash FROM pengguna WHERE username = %s",
@@ -35,7 +35,7 @@ def login(body: LoginRequest, conn: PgConnection = Depends(get_conn),
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
 def logout(creds: HTTPAuthorizationCredentials = Security(bearer_scheme),
-           _: Principal = Depends(require_user), conn: PgConnection = Depends(get_conn)):
+           _: Principal = Depends(require_user), conn: PgConnection = Depends(get_conn, scope="function")):
     token = creds.credentials
     with conn.cursor() as cur:
         cur.execute("UPDATE sesi SET aktif = FALSE WHERE token_hash = %s", (sha256_hex(token),))

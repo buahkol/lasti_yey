@@ -7,7 +7,6 @@ SET TIME ZONE 'Asia/Jakarta';
 CREATE TYPE status_batch    AS ENUM ('BERJALAN', 'DITUTUP');
 CREATE TYPE status_inspeksi AS ENUM ('PASSED', 'HOLD');
 CREATE TYPE hasil_inspeksi  AS ENUM ('OK', 'NG');
-CREATE TYPE jenis_kejadian  AS ENUM ('REJECT', 'BAHAN_BAKU_HABIS', 'ALAT_BERHENTI', 'RATE_DROP');
 CREATE TYPE sumber_kejadian AS ENUM ('AI', 'OPERATOR', 'SENSOR');
 
 -- Pengguna aplikasi (satu peran: Operasional). Password disimpan sebagai hash bcrypt (FR-02).
@@ -78,7 +77,8 @@ CREATE TABLE inspeksi (
 CREATE TABLE kejadian_produksi (
     id          SERIAL          PRIMARY KEY,
     kode_batch  VARCHAR(40)     NOT NULL REFERENCES batch(kode_batch),
-    jenis       jenis_kejadian  NOT NULL,
+    -- REJECT, RATE_DROP (system), BAHAN_BAKU_HABIS, ALAT_BERHENTI, or a kind typed by the operator
+    jenis       VARCHAR(40)     NOT NULL CHECK (jenis ~ '^[A-Z0-9_]+$'),
     sumber      sumber_kejadian NOT NULL,
     keterangan  TEXT,
     waktu       TIMESTAMPTZ     NOT NULL DEFAULT now(),

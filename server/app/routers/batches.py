@@ -35,7 +35,7 @@ def _one(conn: PgConnection, code: str) -> BatchOut:
 
 @router.get("", response_model=list[BatchOut])
 def list_batches(batch_status: BatchState | None = Query(default=None, alias="status"),
-                 sku: str | None = None, conn: PgConnection = Depends(get_conn)):
+                 sku: str | None = None, conn: PgConnection = Depends(get_conn, scope="function")):
     where, params = [], []
     if batch_status:
         where.append("b.status_batch = %s")
@@ -50,7 +50,7 @@ def list_batches(batch_status: BatchState | None = Query(default=None, alias="st
 
 
 @router.post("", response_model=BatchOut, status_code=status.HTTP_201_CREATED)
-def create_batch(body: BatchIn, conn: PgConnection = Depends(get_conn)):
+def create_batch(body: BatchIn, conn: PgConnection = Depends(get_conn, scope="function")):
     with conn.cursor() as cur:
         cur.execute("SELECT 1 FROM produk WHERE sku = %s", (body.sku,))
         if cur.fetchone() is None:
@@ -69,7 +69,7 @@ def create_batch(body: BatchIn, conn: PgConnection = Depends(get_conn)):
 @router.get("/inspection-status", response_model=BatchStatusList)
 def inspection_status(sku: str | None = None,
                       status_: InspectionStatus = Query(default=InspectionStatus.PASSED, alias="status"),
-                      conn: PgConnection = Depends(get_conn)):
+                      conn: PgConnection = Depends(get_conn, scope="function")):
     params: list = [status_.value]
     sql = BATCH_LIST_SQL + " WHERE b.status_inspeksi = %s"
     if sku:
@@ -85,12 +85,12 @@ def inspection_status(sku: str | None = None,
 
 
 @router.get("/{batch_code}", response_model=BatchOut)
-def get_one(batch_code: str, conn: PgConnection = Depends(get_conn)):
+def get_one(batch_code: str, conn: PgConnection = Depends(get_conn, scope="function")):
     return _one(conn, batch_code)
 
 
 @router.post("/{batch_code}/close", response_model=BatchOut)
-def close_batch(batch_code: str, conn: PgConnection = Depends(get_conn),
+def close_batch(batch_code: str, conn: PgConnection = Depends(get_conn, scope="function"),
                 settings: Settings = Depends(get_settings_dep)):
     batch = get_batch(conn, batch_code, for_update=True)
     if batch is None:
@@ -106,7 +106,7 @@ def close_batch(batch_code: str, conn: PgConnection = Depends(get_conn),
 
 
 @router.get("/{batch_code}/inspections", response_model=InspectionHistory)
-def history(batch_code: str, result: Result | None = None, conn: PgConnection = Depends(get_conn)):
+def history(batch_code: str, result: Result | None = None, conn: PgConnection = Depends(get_conn, scope="function")):
     total, _, ng = inspection_counts(conn, batch_code)
     if total == 0:
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"Data inspeksi batch {batch_code} tidak tersedia")
