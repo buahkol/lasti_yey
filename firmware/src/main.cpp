@@ -26,9 +26,17 @@
 #include "device_config.example.h"
 #endif
 
+// HC-SR501 PIR modules assert HIGH; set to LOW for active-LOW sensors such as FC-51.
+#ifndef PIN_IR_ACTIVE_LEVEL
+#define PIN_IR_ACTIVE_LEVEL HIGH
+#endif
+
 // ---------------------------------------------------------------- constants
-static const uint32_t CONFIRM_MS = 30;       // IR must stay LOW this long (debounce)
-static const uint32_t RELEASE_MS = 50;       // ... and HIGH this long before the next can
+static const uint32_t CONFIRM_MS = 30;       // sensor must stay active this long (debounce)
+static const uint32_t RELEASE_MS = 50;       // ... and inactive this long before the next can
+#ifndef PIN_IR_WARMUP_MS
+#define PIN_IR_WARMUP_MS 60000               // HC-SR501 calibration after power-on
+#endif
 static const uint32_t LOCKOUT_MS = 500;      // min gap between two cans (FR-07)
 static const uint32_t REJECT_LED_MS = 2000;  // FR-14
 static const uint32_t ERROR_LED_MS = 2000;   // FR-15, 5 Hz blink
@@ -380,20 +388,40 @@ void captureCan() {
 void onCan() { cfg.mode == MODE_CAPTURE ? captureCan() : inspectCan(); }
 
 // ---------------------------------------------------------------- IR sensor (DV-03, FR-07)
-// Polled state machine: LOW for CONFIRM_MS -> one can; then wait for HIGH for RELEASE_MS.
+// Polled state machine: active for CONFIRM_MS -> one can; then wait for inactive for RELEASE_MS.
 enum IrState : uint8_t { IR_IDLE, IR_CONFIRM, IR_WAIT_RELEASE, IR_RELEASING };
-IrState irState = IR_IDLE;
+IrState irState = IR_WAIT_RELEASE;  // require an inactive baseline after PIR warm-up
 uint32_t irSince = 0, lastCanMs = 0;
+uint32_t irReadyMs = 0;
+
+bool pirDebug = false;  // `pir` console command: log raw GPIO level changes
+
+void pirDebugTick(uint32_t now) {
+  static int last = -1;
+  static uint32_t since = 0;
+  int v = digitalRead(PIN_IR_SENSOR);
+  if (v == last) return;
+  if (pirDebug) {
+    Serial.printf("[pir] %8.2fs GPIO%d=%d", now / 1000.0, PIN_IR_SENSOR, v);
+    if (last >= 0) Serial.printf("  (was %d for %.2fs)", last, (now - since) / 1000.0);
+    if ((int32_t)(now - irReadyMs) < 0) Serial.print("  [warm-up]");
+    Serial.println();
+  }
+  last = v;
+  since = now;
+}
 
 void irTick() {
-  bool low = digitalRead(PIN_IR_SENSOR) == LOW;
   uint32_t now = millis();
+  pirDebugTick(now);
+  if ((int32_t)(now - irReadyMs) < 0) return;  // ignore PIR output during power-on calibration
+  bool active = digitalRead(PIN_IR_SENSOR) == PIN_IR_ACTIVE_LEVEL;
   switch (irState) {
     case IR_IDLE:
-      if (low) { irState = IR_CONFIRM; irSince = now; }
+      if (active) { irState = IR_CONFIRM; irSince = now; }
       break;
     case IR_CONFIRM:
-      if (!low) irState = IR_IDLE;
+      if (!active) irState = IR_IDLE;
       else if (now - irSince >= CONFIRM_MS && now - lastCanMs >= LOCKOUT_MS) {
         lastCanMs = now;
         irState = IR_WAIT_RELEASE;
@@ -401,10 +429,10 @@ void irTick() {
       }
       break;
     case IR_WAIT_RELEASE:
-      if (!low) { irState = IR_RELEASING; irSince = now; }
+      if (!active) { irState = IR_RELEASING; irSince = now; }
       break;
     case IR_RELEASING:
-      if (low) irState = IR_WAIT_RELEASE;
+      if (active) irState = IR_WAIT_RELEASE;
       else if (now - irSince >= RELEASE_MS) irState = IR_IDLE;
       break;
   }
@@ -512,6 +540,7 @@ void handleCommand(String line) {
   if (cmd == "help") {
     Serial.println(
         "status | snap (= one can, without the sensor) | flush | next (can id +1) | wifi | reboot\n"
+        "pir (toggle raw sensor GPIO log)\n"
         "set <key> <value>  keys: ssid pass server key batch mode(inspect|capture) sku label(ok|ng) can aec agc settle\n"
         "mode inspect|capture | batch <code> | label ok|ng | can <id>");
   } else if (cmd == "status") printStatus(Serial);
@@ -520,6 +549,7 @@ void handleCommand(String line) {
   else if (cmd == "next") { nextCan(); Serial.printf("can=%s\n", cfg.canId.c_str()); }
   else if (cmd == "wifi") startWifi();
   else if (cmd == "reboot") ESP.restart();
+  else if (cmd == "pir") { pirDebug = !pirDebug; Serial.printf("pir log %s\n", pirDebug ? "on" : "off"); }
   else if (cmd == "set" || cmd == "mode" || cmd == "batch" || cmd == "label" || cmd == "can") {
     String k = cmd, v = rest;
     if (cmd == "set") {
@@ -649,7 +679,9 @@ void setup() {
   while (!Serial && millis() - t0 < 1500) delay(10);
   Serial.println("\n[boot] SiMonPro firmware");
 
-  pinMode(PIN_IR_SENSOR, INPUT_PULLUP);
+  pinMode(PIN_IR_SENSOR, PIN_IR_ACTIVE_LEVEL == HIGH ? INPUT_PULLDOWN : INPUT_PULLUP);  // some sensors only drive the active level; idle would float
+  irReadyMs = millis() + PIN_IR_WARMUP_MS;
+  Serial.printf("[sensor] warming up for %u s; waiting for inactive baseline\n", PIN_IR_WARMUP_MS / 1000);
   pinMode(PIN_REJECT_LED, OUTPUT);
   digitalWrite(PIN_REJECT_LED, LOW);
   rgb(0);
