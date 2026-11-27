@@ -5,8 +5,8 @@ from PyQt6.QtWidgets import QFrame, QLabel, QPushButton, QSizePolicy, QWidget
 
 from ..assets import pixmap
 from ..components import (
-    Badge, Button, CanPhoto, Checkbox, IconButton, InputField, ModalCard, Overlay, ProgressBar, RadioOption,
-    add_shadow, hbox, show_status, text, toast, vbox,
+    Badge, Button, CanPhoto, Checkbox, IconButton, InputField, ModalCard, Option, Overlay, ProgressBar, RadioOption,
+    add_shadow, bind_select, hbox, show_status, text, toast, vbox,
 )
 from ...models import Alert
 from ..theme import TONES, Color, Type, font
@@ -125,8 +125,12 @@ def confirm_close_batch(window: QWidget, code: str, on_closed=None) -> None:
 
 
 def open_export_pdf(window: QWidget, batch_code: str = "B-2411-02", product: str = "Sarden saus cabai 155 g",
-                    date_label: str = "25Nov2026", per_date: bool = False) -> Overlay:
-    """Export dialog for the batch inspection report or the production recap (FR-21, FR-25)."""
+                    date_label: str = "25Nov2026", per_date: bool = False, batches: list | None = None) -> Overlay:
+    """Export dialog for the batch inspection report or the production recap (FR-21, FR-25).
+
+    batches: optional list of models.Batch the user can pick from in the Batch field.
+    """
+    chosen = {"code": batch_code}
 
     card = ModalCard(560)
     holder: dict = {}
@@ -139,7 +143,18 @@ def open_export_pdf(window: QWidget, batch_code: str = "B-2411-02", product: str
     radios.addWidget(r1, 1)
     radios.addWidget(r2, 1)
     card.body.addLayout(radios)
-    batch = InputField("Batch", "", f"{batch_code}, {product}", "layers", trailing="dropdown")
+    batch = InputField("Batch", "", f"{batch_code}, {product}", "layers", trailing="dropdown" if batches else None)
+    batch.edit.setReadOnly(True)
+    if batches:
+        by_code = {b.code: b for b in batches}
+
+        def pick(code):
+            chosen["code"] = code
+            batch.edit.setText(f"{code}, {by_code[code].product}")
+            file_name.setText(f"Laporan_{code}_{date_label}.pdf")
+
+        bind_select(batch, lambda: [Option(b.code, b.code, f"{b.product}, {b.start_label}") for b in batches], pick,
+                    lambda: chosen["code"], "Cari kode batch atau produk")
     card.body.addWidget(batch)
     card.body.addWidget(text("Isi laporan", Type.OVERLINE, Color.TEXT_TERTIARY))
     box = QFrame()
@@ -166,7 +181,8 @@ def open_export_pdf(window: QWidget, batch_code: str = "B-2411-02", product: str
 
     def switch(per_batch: bool):
         batch.setVisible(per_batch)
-        file_name.setText(f"Laporan_{batch_code}_{date_label}.pdf" if per_batch else f"Rekap_Produksi_{date_label}.pdf")
+        file_name.setText(f"Laporan_{chosen['code']}_{date_label}.pdf" if per_batch
+                          else f"Rekap_Produksi_{date_label}.pdf")
         card.adjustSize()
         holder["o"]._center()
 

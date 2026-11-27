@@ -1,23 +1,20 @@
 """Batch (FR-05, FR-06, FR-27): list with filters, date range, create and close batch."""
 
 from PyQt6.QtCore import QDate, Qt
-from PyQt6.QtWidgets import QFrame, QMenu, QSizePolicy, QWidget
+from PyQt6.QtWidgets import QFrame, QSizePolicy, QWidget
 
 from ...controllers import BatchController
 from ...controllers.batch_controller import FILTERS
 from ...controllers.rules import NG_TOLERANCE_PERCENT
 from .. import formatting as fmt
 from ..components import (
-    AdaptiveRow, Badge, Button, DataTable, DatePicker, IconButton, InputField, ModalCard, Overlay, ProgressBar, SearchField,
-    SegmentedTabs, format_range, hbox, show_status, text, two_line, vbox,
+    AdaptiveRow, Badge, Button, DataTable, DatePicker, IconButton, InputField, ModalCard, Option, Overlay, ProgressBar,
+    SearchField, SegmentedTabs, bind_select, format_range, hbox, open_select, show_status, text, two_line, vbox,
 )
 from ..shell import Page
 from ..theme import Color, Type
 from .common import confirm_close_batch, open_export_pdf
 
-_MENU_STYLE = (f"QMenu {{ background: #FFFFFF; border: 1px solid {Color.BORDER}; border-radius: 12px; padding: 6px; }}"
-               "QMenu::item { padding: 8px 14px; border-radius: 8px; }"
-               f"QMenu::item:selected {{ background: {Color.BRAND_SOFT}; color: {Color.TEXT_PRIMARY}; }}")
 
 
 class BatchPage(Page):
@@ -52,7 +49,7 @@ class BatchPage(Page):
         self.product_btn.clicked.connect(self._product_menu)
         t_lay.addWidget(self.product_btn)
         export = Button("Ekspor PDF", "secondary", "md", "download")
-        export.clicked.connect(lambda: open_export_pdf(self._win()))
+        export.clicked.connect(lambda: open_export_pdf(self._win(), batches=self._ctrl.search()))
         t_lay.addWidget(export)
         bar.add(tools, 0, align=Qt.AlignmentFlag.AlignLeft)
         self.body.addWidget(bar)
@@ -110,7 +107,8 @@ class BatchPage(Page):
                 report.clicked.connect(lambda _=False, code=b.code: self._show_report(code))
                 a.addWidget(report)
                 dl = IconButton("download", "Ekspor PDF", "ghost", 34, Color.ICON)
-                dl.clicked.connect(lambda _=False, code=b.code, p=b.product: open_export_pdf(self._win(), code, p))
+                dl.clicked.connect(lambda _=False, code=b.code, p=b.product: open_export_pdf(
+                    self._win(), code, p, batches=self._ctrl.search()))
                 a.addWidget(dl)
                 a.addWidget(IconButton("more", "Lainnya", "ghost", 34, Color.ICON))
             self.table.add_row([two_line(b.code, b.sku), text(b.product, Type.BODY),
@@ -153,12 +151,11 @@ class BatchPage(Page):
         self._reset_page()
 
     def _product_menu(self) -> None:
-        menu = QMenu(self)
-        menu.setStyleSheet(_MENU_STYLE)
-        for p in [None] + self._ctrl.products():
-            act = menu.addAction(p.name if p else "Semua produk")
-            act.triggered.connect(lambda _=False, pp=p: self._set_product(pp))
-        menu.exec(self.product_btn.mapToGlobal(self.product_btn.rect().bottomLeft()))
+        products = {p.sku: p for p in self._ctrl.products()}
+        options = [Option(None, "Semua produk", f"{len(products)} SKU")] + [
+            Option(p.sku, p.name, p.sku) for p in products.values()]
+        open_select(self.product_btn, options, lambda sku: self._set_product(products.get(sku)), self.sku,
+                    "Cari nama produk atau SKU")
 
     def _set_product(self, product) -> None:
         self.sku = product.sku if product else None
@@ -197,15 +194,14 @@ class BatchPage(Page):
         chosen = {"p": products[0]}
         f_prod = InputField("Produk", "", products[0].label, "package", trailing="dropdown")
         f_prod.edit.setReadOnly(True)
+        by_sku = {p.sku: p for p in products}
 
-        def pick_product():
-            menu = QMenu(f_prod)
-            for p in products:
-                act = menu.addAction(p.label)
-                act.triggered.connect(lambda _=False, pp=p: (chosen.update(p=pp), f_prod.edit.setText(pp.label)))
-            menu.exec(f_prod.field.mapToGlobal(f_prod.field.rect().bottomLeft()))
+        def pick_product(sku):
+            chosen.update(p=by_sku[sku])
+            f_prod.edit.setText(by_sku[sku].label)
 
-        f_prod.trailing_clicked.connect(pick_product)
+        bind_select(f_prod, lambda: [Option(p.sku, p.name, p.sku) for p in products], pick_product,
+                    lambda: chosen["p"].sku, "Cari nama produk atau SKU")
         card.body.addWidget(f_prod)
         info = QFrame()
         info.setObjectName("Info")

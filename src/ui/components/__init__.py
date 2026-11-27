@@ -10,6 +10,7 @@ from .inputs import Checkbox, InputField, RadioOption, SearchField, SegmentedTab
 from .photo import AlertRow, CanPhoto, DefectCard
 from .progress import ProgressBar
 from .status import Badge, LiveIndicator, UserChip, event_kind
+from .select import Option, SelectPopup, bind_select, open_select
 from .table import DataTable, TableFooter, two_line
 
 __all__ = [
@@ -18,4 +19,5 @@ __all__ = [
     "ModalCard", "Overlay", "StatusDialog", "Toast", "show_status", "toast",
     "Checkbox", "InputField", "RadioOption", "SearchField", "SegmentedTabs",
     "DataTable", "TableFooter", "two_line", "AdaptiveRow", "ResponsiveGrid", "AlertRow", "CanPhoto", "DefectCard", "ProgressBar", "Badge", "LiveIndicator", "UserChip", "event_kind",
+    "Option", "SelectPopup", "bind_select", "open_select",
 ]

@@ -1,14 +1,14 @@
-from PyQt6.QtWidgets import QButtonGroup, QMenu, QSizePolicy, QWidget
+from PyQt6.QtWidgets import QSizePolicy
 
 from ...controllers import EventController
-from ...controllers.event_controller import MANUAL_KINDS
+from ...controllers.event_controller import MANUAL_KINDS, kind_label
 from ...models import Batch
 from ..components import (
-    AdaptiveRow, Button, Card, DataTable, InputField, RadioOption, TableFooter, event_kind, hbox, text, toast, vbox,
+    AdaptiveRow, Button, Card, DataTable, InputField, Option, TableFooter, bind_select, event_kind, hbox, open_select,
+    text, toast, vbox,
 )
 from ..shell import Page
 from ..theme import Color, Type
-from .batch import _MENU_STYLE
 
 
 class KejadianPage(Page):
@@ -71,15 +71,16 @@ class KejadianPage(Page):
         self.page_index = index
         self._render()
 
-    def _batch_menu(self) -> None:
-        self._menu(self.batch_btn, self._ctrl.batches(), lambda b: self.show_batch(b.code))
+    @staticmethod
+    def _batch_options(batches: list) -> list:
+        return [Option(b.code, b.code, f"{b.product}, {'berjalan' if b.running else b.start_label}") for b in batches]
 
-    def _menu(self, anchor: QWidget, batches: list, on_pick) -> None:
-        menu = QMenu(anchor)
-        menu.setStyleSheet(_MENU_STYLE)
-        for b in batches:
-            menu.addAction(f"{b.code}, {b.product}").triggered.connect(lambda _=False, bb=b: on_pick(bb))
-        menu.exec(anchor.mapToGlobal(anchor.rect().bottomLeft()))
+    def _batch_menu(self) -> None:
+        open_select(self.batch_btn, self._batch_options(self._ctrl.batches()), self.show_batch, self.code,
+                    "Cari kode batch atau produk")
+
+    def _pick_form_batch(self, code: str) -> None:
+        self._set_form_batch(self._ctrl.find_batch(code))
 
     def _form(self, batch: Batch | None) -> Card:
         card = Card((22, 22, 22, 22), 18)
@@ -91,20 +92,17 @@ class KejadianPage(Page):
         self.f_batch = InputField("Batch", "Pilih batch yang sedang berjalan", "", "layers", trailing="dropdown",
                                   helper="Pilih salah satu batch yang sedang berjalan")
         self.f_batch.edit.setReadOnly(True)
-        self.f_batch.trailing_clicked.connect(
-            lambda: self._menu(self.f_batch.field, self._ctrl.running_batches(), self._set_form_batch))
+        bind_select(self.f_batch, lambda: self._batch_options(self._ctrl.running_batches()), self._pick_form_batch,
+                    lambda: self.form_batch.code if self.form_batch else None, "Cari batch yang sedang berjalan")
         card.add(self.f_batch)
         self._set_form_batch(batch)
 
-        kinds = QWidget()
-        k_lay = vbox(8, (0, 0, 0, 0), kinds)
-        k_lay.addWidget(text("Jenis kejadian", Type.LABEL))
-        self.kind_group = QButtonGroup(self)
-        for i, (_, label, desc) in enumerate(MANUAL_KINDS):
-            opt = RadioOption(label, desc, i == 0)
-            self.kind_group.addButton(opt, i)
-            k_lay.addWidget(opt)
-        card.add(kinds)
+        self.f_kind = InputField("Jenis kejadian", "Pilih atau ketik jenis kejadian", MANUAL_KINDS[0][1], "activity",
+                                 trailing="dropdown", helper="Ketik sendiri jika jenisnya tidak ada di daftar")
+        bind_select(self.f_kind, lambda: [Option(label, label, desc) for _, label, desc in self._ctrl.kind_suggestions()],
+                    self.f_kind.edit.setText, self.f_kind.value, "Cari atau ketik jenis kejadian", allow_custom=True,
+                    on_custom=self.f_kind.edit.setText)
+        card.add(self.f_kind)
 
         self.f_note = InputField("Keterangan", "Tulis penyebab dan lama kejadian", "", "edit")
         self.f_note.edit.returnPressed.connect(self._save)
@@ -130,13 +128,14 @@ class KejadianPage(Page):
     def _reset_form(self) -> None:
         self.f_note.edit.clear()
         self.f_note.set_error(None)
-        self.kind_group.button(0).setChecked(True)
+        self.f_kind.edit.setText(MANUAL_KINDS[0][1])
+        self.f_kind.set_error(None)
 
     def _save(self) -> None:
-        kind = MANUAL_KINDS[self.kind_group.checkedId()][0]
         code = self.form_batch.code if self.form_batch else ""
-        result = self._ctrl.record(code, kind, self.f_note.value())
+        result = self._ctrl.record(code, self.f_kind.value(), self.f_note.value())
         self.f_batch.set_error(result.errors.get("batch"))
+        self.f_kind.set_error(result.errors.get("kind"))
         self.f_note.set_error(result.errors.get("note"))
         if result.event is None:
             return
@@ -147,4 +146,4 @@ class KejadianPage(Page):
         self._reset_form()
         self._render()
         toast(self._win(), "success", "Kejadian tersimpan",
-              f"{kind.replace('_', ' ')} pukul {result.event.time} masuk ke rekap {code}.")
+              f"{kind_label(result.event.kind)} pukul {result.event.time} masuk ke rekap {code}.")

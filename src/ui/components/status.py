@@ -97,7 +97,9 @@ class UserChip(QFrame):
 def event_kind(kind: str) -> QWidget:
     w = QWidget()
     lay = hbox(8, (0, 0, 0, 0), w)
-    dot = _Dot(Color.CHART_NG if kind == "REJECT" else TONES["amber"].solid)
+    preset = {"REJECT": Color.CHART_NG, "BAHAN_BAKU_HABIS": TONES["amber"].solid, "ALAT_BERHENTI": TONES["amber"].solid,
+              "RATE_DROP": TONES["amber"].solid}
+    dot = _Dot(preset.get(kind, TONES["blue"].solid))  # blue: a type typed by the operator
     lay.addWidget(dot)
     lay.addWidget(text(kind.replace("_", " "), Type.BODY_STRONG))
     return w
