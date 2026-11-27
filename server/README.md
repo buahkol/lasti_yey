@@ -3,15 +3,37 @@
 FastAPI service that receives data from the ESP32-S3, runs PatchCore, and serves the desktop app.
 The contract follows D2 §3.C (base URL `/api/v1`). Interactive docs: `http://<server>:8000/docs`.
 
+## CPU or GPU
+
+**The server and the `ml/` scripts run on both CPU and NVIDIA GPU.** The same code and the same
+model files (`models/<sku>/vN.pt`) work on either; a model trained on a GPU loads on a CPU machine
+and the other way round. Only the PyTorch build you install differs. Pick **one** group:
+
+| Machine | Install | Size | Inference per can |
+|---|---|---|---|
+| NVIDIA GPU (Linux: CUDA 12.8, needs the NVIDIA driver) | `uv sync --group server --group ml` | ~3 GB | ~70 ms (RTX 4060 Laptop) |
+| No NVIDIA GPU (laptop, Intel/AMD graphics, nouveau driver) | `uv sync --group server --group ml-cpu` | ~250 MB | ~460 ms (laptop i5-8265U, 4 cores) |
+
+`ml` also runs on CPU, it just downloads CUDA libraries it will not use. `ml` and `ml-cpu` cannot be
+combined; switching from one to the other with `uv sync` replaces the PyTorch build. On Windows and
+macOS both groups install a CPU build (GPU on Windows: not set up).
+
+The device is chosen at start with `TORCH_DEVICE` (`.env`): `auto` (default) uses CUDA when available
+and otherwise the CPU; `cpu` or `cuda` force it. `GET /api/v1/health` shows which one is in use.
+The `ml/` scripts take `--device auto|cpu|cuda` the same way.
+
 ## Run (edge server, `pn@endeavour`)
 
 ```bash
 docker compose up -d                       # PostgreSQL 15 on :5433 (init.sql + dummy.sql on first start)
-uv sync --group server --group ml          # see "Offline install" if downloads fail
+uv sync --group server --group ml          # GPU; use --group ml-cpu on a CPU-only machine (see above)
 cp .env.example .env                       # adjust paths if needed
 uv run uvicorn server.app.main:app --host 0.0.0.0 --port 8000
 curl http://localhost:8000/api/v1/health   # lists loaded models and the device (cuda/cpu)
 ```
+
+`docker compose` can be replaced by `podman compose` (or the equivalent `podman run`) where Docker is
+not installed. If downloads fail, see "Offline install" below.
 
 Without a model yet, run with `MODEL_BACKEND=stub` (score = image brightness; a bright image is NG).
 Use this to try the firmware and the desktop app before PatchCore is trained.
@@ -49,7 +71,7 @@ yourself you need the code, the server dependencies and a dataset folder.
 
 ```bash
 git clone https://github.com/buahkol/lasti_yey.git && cd lasti_yey
-uv sync --group server           # torch + torchvision; the ImageNet backbone downloads on first run
+uv sync --group server --group ml-cpu   # or --group ml with an NVIDIA GPU; the ImageNet backbone downloads on first run
 ```
 
 **Our photos:** get the `raw/<sku>/` folder from the team (shared separately, not via git), put it
@@ -109,7 +131,7 @@ which keeps timing out, while system tools (curl, via systemd-resolved) work. Wo
 
 ```bash
 export VENV=/mnt/storage/simonpro/venv WHEELS=/mnt/storage/simonpro/wheels
-uv export --frozen --no-hashes --no-emit-project --group server --group ml --group dev > /tmp/req.txt
+uv export --frozen --no-hashes --no-emit-project --group server --group ml --group dev > /tmp/req.txt   # ml-cpu for CPU
 /usr/bin/python3 tools/fetch_wheels.py --req /tmp/req.txt --out $WHEELS --python-tag cp311
 uv venv --python 3.11 $VENV
 uv pip install --python $VENV/bin/python --no-index --find-links $WHEELS -r /tmp/req.txt
