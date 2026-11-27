@@ -11,7 +11,8 @@ from ...controllers.rules import NG_TOLERANCE_PERCENT
 from .. import formatting as fmt
 from ..components import (
     AdaptiveRow, Badge, Button, DataTable, DatePicker, IconButton, InputField, ModalCard, Option, Overlay, ProgressBar,
-    SearchField, SegmentedTabs, bind_select, format_range, hbox, open_select, show_status, text, two_line, vbox,
+    SearchField, SegmentedTabs, bind_select, format_range, hbox, open_select, show_status, text, toast, two_line,
+    vbox,
 )
 from ..shell import Page
 from ..theme import Color, Type
@@ -191,6 +192,9 @@ class BatchPage(Page):
         confirm_close_batch(self._win(), code, closed)
 
     def _create_dialog(self, code: str | None = None) -> None:
+        if not self._ctrl.products():
+            toast(self._win(), "info", "Belum ada produk", "Tambahkan produk di halaman Produk sebelum membuat batch.")
+            return
         code = code or self._ctrl.suggest_code(self._today.toPyDate())
         card = ModalCard(480)
         holder: dict = {}

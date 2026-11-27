@@ -19,9 +19,9 @@ class KejadianPage(Page):
         self.page_index = 0
         self._highlight_first = False
         running = sorted(controller.running_batches(), key=lambda b: b.started_at)
-        self.code = running[-1].code if running else controller.batches()[0].code
+        self.code = self._default_code()  # "" on a fresh database without batches
 
-        self.batch_btn = Button(self.code, "outline", "md", "layers")
+        self.batch_btn = Button(self.code or "Belum ada batch", "outline", "md", "layers")
         self.batch_btn.clicked.connect(self._batch_menu)
         self.actions.addWidget(self.batch_btn)
 
@@ -36,7 +36,16 @@ class KejadianPage(Page):
         self.body.addWidget(body, 1)
         self._render()
 
+    def _default_code(self) -> str:
+        """The newest running batch, else the newest batch, else "" (no batches yet)."""
+        running = sorted(self._ctrl.running_batches(), key=lambda b: b.started_at)
+        batches = self._ctrl.batches()
+        return running[-1].code if running else (batches[0].code if batches else "")
+
     def on_show(self) -> None:
+        if not self.code or self._ctrl.find_batch(self.code) is None:
+            self.code = self._default_code()  # the first batch may have been created meanwhile
+            self.batch_btn.setText(f" {self.code or 'Belum ada batch'}")
         self._render()
 
     def show_batch(self, code: str) -> None:
@@ -63,7 +72,8 @@ class KejadianPage(Page):
                                 text(e.note or "-", Type.BODY, Color.TEXT_SECONDARY)],
                                selected=i == 0 and self._highlight_first)
         self._highlight_first = False
-        self.table.set_empty(None if rows else f"Belum ada kejadian pada batch {self.code}.")
+        self.table.set_empty(None if rows else (f"Belum ada kejadian pada batch {self.code}." if self.code
+                                                 else "Belum ada batch. Buat batch di halaman Batch."))
         self.footer.update_state(f"Menampilkan {len(shown)} dari {len(rows)} kejadian batch {self.code}. "
                                  "REJECT dicatat otomatis setiap kali AI menyatakan kaleng NG.", self.page_index, pages)
 
