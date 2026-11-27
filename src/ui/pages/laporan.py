@@ -121,11 +121,9 @@ class LaporanPage(Page):
     def _export(self) -> None:
         if self.stack.currentIndex() == 1:
             start, end = self.range
-            label = f"{start.toString('ddMMM')}_{end.toString('ddMMMyyyy')}"
-            open_export_pdf(self._win(), date_label=label, per_date=True)
+            open_export_pdf(self._win(), self._ctrl, None, start.toPyDate(), end.toPyDate(), per_date=True)
         else:
-            report = self._ctrl.batch_report(self.code)
-            open_export_pdf(self._win(), self.code, report["product"] if report else "", batches=self._ctrl.batches())
+            open_export_pdf(self._win(), self._ctrl, self.code, self.range[0].toPyDate(), self.range[1].toPyDate())
 
     def _batch_menu(self) -> None:
         options = [Option(b.code, b.code, f"{b.product}, {b.start_label}") for b in self._ctrl.batches()]

@@ -89,7 +89,6 @@ class ProdukPage(Page):
             edit = IconButton("edit", "Ubah produk", "ghost", 34, Color.ICON)
             edit.clicked.connect(lambda _=False, k=i: self._load(k))
             a_lay.addWidget(edit)
-            a_lay.addWidget(IconButton("more", "Lainnya", "ghost", 34, Color.ICON))
             self.table.add_row([text(p.sku, Type.BODY_STRONG), text(p.name, Type.BODY),
                                 text(fmt.rupiah(p.price), Type.BODY_STRONG),
                                 text(fmt.score(p.threshold), Type.BODY_STRONG),

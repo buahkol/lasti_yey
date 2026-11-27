@@ -17,7 +17,6 @@ from .pages.kejadian import KejadianPage
 from .pages.laporan import LaporanPage
 from .pages.login import LoginPage
 from .pages.produk import ProdukPage
-from .pages.riwayat import RiwayatPage
 from .shell import AppWindow
 from .theme import apply_theme
 from .theme.scale import choose_scale
@@ -38,15 +37,16 @@ class SiMonProApp:
     def _open_main(self, user: User) -> None:
         c = self.controllers
         win = AppWindow()
+        win.user = user  # printed on PDF reports
         getter = lambda: win  # noqa: E731
         win.add_page("dashboard", DashboardPage(c.dashboard, c.batches, user, win.go, getter))
         win.add_page("produk", ProdukPage(c.products, getter))
         laporan = LaporanPage(c.reports, getter)
-        win.add_page("batch", BatchPage(c.batches, getter, lambda code: (win.go("laporan"), laporan.show_batch(code))))
+        win.add_page("batch", BatchPage(c.batches, getter, lambda code: (win.go("laporan"), laporan.show_batch(code)),
+                                        c.reports))
         win.add_page("alert", AlertPage(c.alerts, getter))
         win.add_page("laporan", laporan)
         win.add_page("kejadian", KejadianPage(c.events, getter))
-        win.add_page("riwayat", RiwayatPage(c.history, getter))
         win.logout_requested.connect(self._logout)
         win.go("dashboard")
         win.showMaximized()

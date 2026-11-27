@@ -1,7 +1,9 @@
 """Pop-ups shared by several pages: photo viewer and close-batch confirmation."""
 
-from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QFrame, QLabel, QPushButton, QSizePolicy, QWidget
+import os
+from datetime import date
+
+from PyQt6.QtWidgets import QFileDialog, QFrame, QLabel, QSizePolicy, QWidget
 
 from ..assets import pixmap
 from ..components import (
@@ -9,7 +11,8 @@ from ..components import (
     add_shadow, bind_select, hbox, show_status, text, toast, vbox,
 )
 from ...models import Alert
-from ..theme import TONES, Color, Type, font
+from ...reports import batch_report_pdf, date_recap_pdf
+from ..theme import TONES, Color, Type
 
 
 def open_photo_viewer(window: QWidget, alert: Alert) -> Overlay:
@@ -27,29 +30,11 @@ def open_photo_viewer(window: QWidget, alert: Alert) -> Overlay:
     left.setStyleSheet(f"QFrame#ViewerLeft {{ background: {Color.BRAND_STRONG}; border-top-left-radius: 24px;"
                        " border-bottom-left-radius: 24px; }")
     l_lay = vbox(12, (20, 20, 20, 20), left)
-    photo = CanPhoto(defect, (16, 16, 16, 16))
+    photo = CanPhoto(defect, (16, 16, 16, 16))  # one photo, with the highest anomaly area marked
     photo.setFixedSize(720, 510)
     l_lay.addWidget(photo)
     row = hbox(8)
-    seg = QFrame()
-    seg.setObjectName("Seg")
-    seg.setStyleSheet("QFrame#Seg { background: #22394D; border-radius: 18px; }")
-    s_lay = hbox(2, (3, 3, 3, 3), seg)
-    btns = []
-    for label, on in (("Foto asli", False), ("Peta anomali", True)):
-        b = QPushButton(label)
-        b.setCheckable(True)
-        b.setAutoExclusive(True)
-        b.setChecked(on)
-        b.setFont(font(Type.LABEL))
-        b.setCursor(Qt.CursorShape.PointingHandCursor)
-        b.setStyleSheet("QPushButton { color: rgba(255,255,255,0.7); background: transparent; border: none;"
-                        " border-radius: 15px; padding: 6px 12px; }"
-                        f"QPushButton:checked {{ background: #FFFFFF; color: {Color.TEXT_PRIMARY}; }}")
-        s_lay.addWidget(b)
-        btns.append(b)
-    btns[0].toggled.connect(lambda on: photo.set_heatmap(not on))
-    row.addWidget(seg)
+    row.addWidget(text("Lingkaran menandai area skor anomali tertinggi", Type.CAPTION, "rgba(255,255,255,0.6)"))
     row.addStretch(1)
     row.addWidget(text("640 x 480 piksel, ESP32-CAM", Type.CAPTION, "rgba(255,255,255,0.6)"))
     l_lay.addLayout(row)
@@ -64,7 +49,10 @@ def open_photo_viewer(window: QWidget, alert: Alert) -> Overlay:
     right.addLayout(top)
     head = vbox(2)
     head.addWidget(text(batch, Type.DISPLAY))
-    head.addWidget(text(f"Inspeksi nomor 412, pukul {time}", Type.CAPTION, Color.TEXT_TERTIARY))
+    months = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"]
+    when = (f"{alert.timestamp.day} {months[alert.timestamp.month - 1]} {alert.timestamp.year}, pukul {time}"
+            if alert.timestamp else f"Pukul {time}")
+    head.addWidget(text(when, Type.CAPTION, Color.TEXT_TERTIARY))
     right.addLayout(head)
     score_box = QFrame()
     score_box.setObjectName("Score")
@@ -91,13 +79,9 @@ def open_photo_viewer(window: QWidget, alert: Alert) -> Overlay:
         info.addWidget(r)
     right.addLayout(info)
     right.addStretch(1)
-    nav = hbox(8)
-    nav.addWidget(IconButton("chevron-left", "Alert sebelumnya", "outline", 44))
-    nav.addWidget(IconButton("chevron-right", "Alert berikutnya", "outline", 44))
-    hist = Button("Buka riwayat batch", "primary", "md", "history")
-    hist.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-    nav.addWidget(hist)
-    right.addLayout(nav)
+    done = Button("Tutup", "outline")
+    done.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+    right.addWidget(done)
     holder = QWidget()
     holder.setFixedWidth(380)
     holder.setLayout(right)
@@ -105,7 +89,7 @@ def open_photo_viewer(window: QWidget, alert: Alert) -> Overlay:
 
     overlay = Overlay(window, card).open()
     close.clicked.connect(overlay.close_overlay)
-    hist.clicked.connect(lambda: (overlay.close_overlay(), window.open_batch("riwayat", batch)))
+    done.clicked.connect(overlay.close_overlay)
     return overlay
 
 
@@ -124,13 +108,51 @@ def confirm_close_batch(window: QWidget, code: str, on_closed=None) -> None:
 
 
 
-def open_export_pdf(window: QWidget, batch_code: str = "B-2411-02", product: str = "Sarden saus cabai 155 g",
-                    date_label: str = "25Nov2026", per_date: bool = False, batches: list | None = None) -> Overlay:
-    """Export dialog for the batch inspection report or the production recap (FR-21, FR-25).
+_MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"]
+_BATCH_PARTS = [("summary", "Ringkasan OK, NG, persentase NG, dan status", True),
+                ("chart", "Grafik dan tabel sebaran NG per jam", True),
+                ("loss", "Estimasi kerugian", True),
+                ("events", "Daftar kejadian produksi", True),
+                ("top_scores", "Skor NG tertinggi (tanpa foto)", False)]
+_RECAP_PARTS = [("summary", "Ringkasan OK, NG, persentase NG, dan status batch", True),
+                ("chart", "Grafik output per hari", True),
+                ("loss", "Estimasi kerugian", True),
+                ("table", "Tabel rekap per batch", True)]
 
-    batches: optional list of models.Batch the user can pick from in the Batch field.
+
+def _default_folder() -> str:
+    downloads = os.path.join(os.path.expanduser("~"), "Downloads")
+    return downloads if os.path.isdir(downloads) else os.path.expanduser("~")
+
+
+def ask_save_path(window: QWidget, suggested: str) -> str:
+    """Ask where to save the PDF. Returns an empty string when cancelled."""
+    path, _ = QFileDialog.getSaveFileName(window, "Simpan laporan PDF", os.path.join(_default_folder(), suggested),
+                                          "Dokumen PDF (*.pdf)")
+    if path and not path.lower().endswith(".pdf"):
+        path += ".pdf"
+    return path
+
+
+def _range_label(start: date, end: date) -> str:
+    if start == end:
+        return f"{start.day} {_MONTHS_SHORT[start.month - 1]} {start.year}"
+    return f"{start.day} {_MONTHS_SHORT[start.month - 1]} sampai {end.day} {_MONTHS_SHORT[end.month - 1]} {end.year}"
+
+
+def open_export_pdf(window: QWidget, reports, batch_code: str | None = None, start: date | None = None,
+                    end: date | None = None, per_date: bool = False) -> Overlay:
+    """Export the batch inspection report or the production recap as a PDF (FR-21, FR-25).
+
+    reports is the ReportController; the PDF itself is written by src/reports/pdf_export.py.
+    Photos are never included in the report.
     """
-    chosen = {"code": batch_code}
+    batches = reports.batches()
+    by_code = {b.code: b for b in batches}
+    code = batch_code if batch_code in by_code else (batches[0].code if batches else "")
+    start = start or date(2026, 11, 23)
+    end = end or date(2026, 11, 25)
+    state = {"code": code, "per_date": per_date}
 
     card = ModalCard(560)
     holder: dict = {}
@@ -138,34 +160,50 @@ def open_export_pdf(window: QWidget, batch_code: str = "B-2411-02", product: str
                 lambda: holder["o"].close_overlay())
     card.body.addWidget(text("Jenis laporan", Type.OVERLINE, Color.TEXT_TERTIARY))
     radios = hbox(10)
-    r1 = RadioOption("Inspeksi batch", "Ringkasan OK dan NG, grafik NG per jam, estimasi kerugian", True)
-    r2 = RadioOption("Rekap per tanggal", "Output, OK, NG, dan kejadian dalam rentang tanggal")
+    r1 = RadioOption("Inspeksi batch", "Hasil satu batch, grafik NG per jam", not per_date)
+    r2 = RadioOption("Rekap per tanggal", "Semua batch dalam rentang tanggal", per_date)
     radios.addWidget(r1, 1)
     radios.addWidget(r2, 1)
     card.body.addLayout(radios)
-    batch = InputField("Batch", "", f"{batch_code}, {product}", "layers", trailing="dropdown" if batches else None)
+
+    batch = InputField("Batch", "", "", "layers", trailing="dropdown")
     batch.edit.setReadOnly(True)
-    if batches:
-        by_code = {b.code: b for b in batches}
 
-        def pick(code):
-            chosen["code"] = code
-            batch.edit.setText(f"{code}, {by_code[code].product}")
-            file_name.setText(f"Laporan_{code}_{date_label}.pdf")
+    def batch_text(c: str) -> str:
+        b = by_code.get(c)
+        return f"{c}, {b.product}" if b else c
 
-        bind_select(batch, lambda: [Option(b.code, b.code, f"{b.product}, {b.start_label}") for b in batches], pick,
-                    lambda: chosen["code"], "Cari kode batch atau produk")
+    batch.edit.setText(batch_text(code))
+
+    def pick(c):
+        state["code"] = c
+        batch.edit.setText(batch_text(c))
+        batch.set_error(None)
+        refresh()
+
+    bind_select(batch, lambda: [Option(b.code, b.code, f"{b.product}, {b.start_label}") for b in batches], pick,
+                lambda: state["code"], "Cari kode batch atau produk")
     card.body.addWidget(batch)
+    period = InputField("Rentang tanggal", "", _range_label(start, end), "calendar",
+                        helper="Ubah rentang dari pemilih tanggal di halaman Laporan atau Batch")
+    period.edit.setReadOnly(True)
+    card.body.addWidget(period)
+
     card.body.addWidget(text("Isi laporan", Type.OVERLINE, Color.TEXT_TERTIARY))
-    box = QFrame()
-    box.setObjectName("Checks")
-    box.setStyleSheet(f"QFrame#Checks {{ background: {Color.SUBTLE}; border: 1px solid {Color.BORDER}; border-radius: 14px; }}")
-    b_lay = vbox(10, (14, 14, 14, 14), box)
-    for label, on in (("Ringkasan OK, NG, dan persentase NG", True), ("Grafik sebaran NG per jam", True),
-                      ("Estimasi kerugian", True), ("Foto kaleng NG dengan skor tertinggi", True),
-                      ("Daftar kejadian produksi", False)):
-        b_lay.addWidget(Checkbox(label, on))
-    card.body.addWidget(box)
+    boxes = {}
+    for mode, parts in (("batch", _BATCH_PARTS), ("recap", _RECAP_PARTS)):
+        box = QFrame()
+        box.setObjectName("Checks")
+        box.setStyleSheet(f"QFrame#Checks {{ background: {Color.SUBTLE}; border: 1px solid {Color.BORDER};"
+                          " border-radius: 14px; }")
+        b_lay = vbox(10, (14, 14, 14, 14), box)
+        checks = {}
+        for key, label, on in parts:
+            checks[key] = Checkbox(label, on)
+            b_lay.addWidget(checks[key])
+        boxes[mode] = (box, checks)
+        card.body.addWidget(box)
+
     t = TONES["indigo"]
     file_row = QFrame()
     file_row.setObjectName("File")
@@ -173,20 +211,35 @@ def open_export_pdf(window: QWidget, batch_code: str = "B-2411-02", product: str
     f_lay = hbox(10, (12, 10, 12, 10), file_row)
     f_lay.addWidget(_pix_label(pixmap("file", t.ink, 18)))
     col = vbox(0)
-    file_name = text(f"Laporan_{batch_code}_{date_label}.pdf", Type.BODY_STRONG, t.ink)
+    file_name = text("", Type.BODY_STRONG, t.ink)
     col.addWidget(file_name)
-    col.addWidget(text("3 halaman, sekitar 1,2 MB", Type.CAPTION, t.ink))
+    col.addWidget(text("PDF ukuran A4, tanpa foto kaleng", Type.CAPTION, t.ink))
     f_lay.addLayout(col, 1)
     card.body.addWidget(file_row)
 
-    def switch(per_batch: bool):
-        batch.setVisible(per_batch)
-        file_name.setText(f"Laporan_{chosen['code']}_{date_label}.pdf" if per_batch
-                          else f"Rekap_Produksi_{date_label}.pdf")
-        card.adjustSize()
-        holder["o"]._center()
+    def suggested_name() -> str:
+        if state["per_date"]:
+            tag = f"{start:%d}{_MONTHS_SHORT[start.month - 1]}" + ("" if start == end else
+                                                                    f"-{end:%d}{_MONTHS_SHORT[end.month - 1]}")
+            return f"Rekap_Produksi_{tag}{end.year}.pdf"
+        return f"Laporan_Inspeksi_{state['code']}.pdf"
 
-    r1.toggled.connect(lambda on: switch(on))
+    def refresh():
+        per = state["per_date"]
+        batch.setVisible(not per)
+        period.setVisible(per)
+        boxes["batch"][0].setVisible(not per)
+        boxes["recap"][0].setVisible(per)
+        file_name.setText(suggested_name())
+        card.adjustSize()
+        if "o" in holder:
+            holder["o"]._center()
+
+    def switch(per_batch: bool):
+        state["per_date"] = not per_batch
+        refresh()
+
+    r1.toggled.connect(switch)
     row = hbox(10)
     cancel = Button("Batal", "outline")
     export = Button("Ekspor PDF", "primary", "md", "download")
@@ -194,15 +247,38 @@ def open_export_pdf(window: QWidget, batch_code: str = "B-2411-02", product: str
         b.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         row.addWidget(b)
     card.body.addLayout(row)
+    refresh()
     holder["o"] = Overlay(window, card).open()
     cancel.clicked.connect(holder["o"].close_overlay)
-    if per_date:
-        r2.setChecked(True)
 
     def do_export():
-        name = file_name.text()
+        per = state["per_date"]
+        checks = boxes["recap" if per else "batch"][1]
+        sections = tuple(k for k, c in checks.items() if c.isChecked())
+        if not sections:
+            toast(window, "error", "Isi laporan kosong", "Centang minimal satu bagian yang akan dicetak.")
+            return
+        report = None if per else reports.batch_report(state["code"])
+        if not per and report is None:
+            batch.set_error("Data inspeksi batch ini belum tersedia. Pilih batch lain.")
+            refresh()
+            return
+        path = ask_save_path(window, suggested_name())
+        if not path:
+            return
+        user = getattr(window, "user", None)
+        printed_by = user.name if user else "Operasional"
+        try:
+            if per:
+                date_recap_pdf(path, reports.date_recap(start, end), sections, printed_by)
+            else:
+                batch_report_pdf(path, report, sections, printed_by)
+        except OSError as e:
+            toast(window, "error", "PDF gagal disimpan", f"File tidak dapat ditulis: {e.strerror or e}.")
+            return
         holder["o"].close_overlay()
-        toast(window, "success", "PDF berhasil disimpan", f"{name} tersimpan di folder Unduhan.")
+        toast(window, "success", "PDF berhasil disimpan", f"{os.path.basename(path)} tersimpan di "
+                                                          f"{os.path.dirname(path)}.")
 
     export.clicked.connect(do_export)
     return holder["o"]

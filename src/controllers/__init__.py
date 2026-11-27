@@ -10,7 +10,6 @@ from .auth_controller import AuthController
 from .batch_controller import BatchController, CreateResult
 from .dashboard_controller import DashboardController
 from .event_controller import EventController
-from .history_controller import HistoryController
 from .product_controller import ProductController
 from .report_controller import ReportController
 
@@ -24,7 +23,6 @@ class Controllers:
     alerts: AlertController
     reports: ReportController
     events: EventController
-    history: HistoryController
 
     @classmethod
     def create(cls) -> "Controllers":
@@ -39,12 +37,10 @@ class Controllers:
             alerts=AlertController(inspections),
             reports=ReportController(reports, batches, products),
             events=EventController(EventService(), batches),
-            history=HistoryController(inspections, batches),
         )
 
 
 __all__ = [
     "Controllers", "AuthController", "DashboardController", "ProductController", "BatchController",
     "CreateResult", "AlertController", "ReportController", "EventController",
-    "HistoryController",
 ]

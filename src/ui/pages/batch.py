@@ -18,11 +18,12 @@ from .common import confirm_close_batch, open_export_pdf
 
 
 class BatchPage(Page):
-    def __init__(self, controller: BatchController, window_getter, open_report=None):
+    def __init__(self, controller: BatchController, window_getter, open_report=None, reports=None):
         super().__init__("Batch")
         self._ctrl = controller
         self._win = window_getter
         self._open_report = open_report
+        self._reports = reports  # ReportController, used by the PDF export
         self.filter_key = None
         self.sku = None
         self.page_index = 0
@@ -49,7 +50,7 @@ class BatchPage(Page):
         self.product_btn.clicked.connect(self._product_menu)
         t_lay.addWidget(self.product_btn)
         export = Button("Ekspor PDF", "secondary", "md", "download")
-        export.clicked.connect(lambda: open_export_pdf(self._win(), batches=self._ctrl.search()))
+        export.clicked.connect(lambda: self._export(None, per_date=True))
         t_lay.addWidget(export)
         bar.add(tools, 0, align=Qt.AlignmentFlag.AlignLeft)
         self.body.addWidget(bar)
@@ -107,10 +108,8 @@ class BatchPage(Page):
                 report.clicked.connect(lambda _=False, code=b.code: self._show_report(code))
                 a.addWidget(report)
                 dl = IconButton("download", "Ekspor PDF", "ghost", 34, Color.ICON)
-                dl.clicked.connect(lambda _=False, code=b.code, p=b.product: open_export_pdf(
-                    self._win(), code, p, batches=self._ctrl.search()))
+                dl.clicked.connect(lambda _=False, code=b.code: self._export(code))
                 a.addWidget(dl)
-                a.addWidget(IconButton("more", "Lainnya", "ghost", 34, Color.ICON))
             self.table.add_row([two_line(b.code, b.sku), text(b.product, Type.BODY),
                                 two_line(b.start_label, b.duration, strong=False),
                                 text(fmt.num(b.output), Type.BODY_STRONG), bar,
@@ -171,6 +170,11 @@ class BatchPage(Page):
         self.range = (start, end)
         self.date_btn.setText(f" {format_range(start, end)}")
         self._reset_page()
+
+    def _export(self, code: str | None, per_date: bool = False) -> None:
+        if self._reports is not None:
+            open_export_pdf(self._win(), self._reports, code, self.range[0].toPyDate(), self.range[1].toPyDate(),
+                            per_date)
 
     def _show_report(self, code: str) -> None:
         if self._open_report:

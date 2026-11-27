@@ -7,9 +7,8 @@ controllers apply the business rules, and views in src/ui only read them.
 from .alert import Alert
 from .batch import Batch, BatchStatus, InspectionStatus
 from .event import ProductionEvent
-from .inspection import Inspection
 from .product import Product
 from .user import User
 
-__all__ = ["Alert", "Batch", "BatchStatus", "Inspection", "InspectionStatus", "Product", "ProductionEvent",
+__all__ = ["Alert", "Batch", "BatchStatus", "InspectionStatus", "Product", "ProductionEvent",
            "User"]

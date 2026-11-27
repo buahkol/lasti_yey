@@ -23,21 +23,6 @@ def test_record_event_rejects_closed_batch_and_reject_kind():
     assert "kind" in c.events.record("B-2411-02", "REJECT", "").errors
 
 
-def test_history_counts_match_batch_and_filter():
-    c = make()
-    h = c.history.find(" b-2410-24 ")
-    batch = h.batch
-    assert (h.total, h.ng, h.ok) == (batch.output, batch.ng_count, batch.ok_count)
-    assert all(r.result == "NG" for r in c.history.filtered(h, "NG"))
-    assert len(c.history.filtered(h, "OK")) == h.ok
-    times = [r.timestamp for r in h.rows]
-    assert times == sorted(times, reverse=True)
-
-
-def test_history_unknown_batch_is_not_found():
-    assert make().history.find("B-2499-01") is None
-
-
 def test_greeting_follows_time():
     from src.controllers.dashboard_controller import DashboardController
     greetings = [DashboardController.greeting(datetime(2026, 11, 25, h)) for h in (6, 12, 16, 19, 2)]

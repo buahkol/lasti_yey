@@ -7,7 +7,9 @@ from PyQt6.QtWidgets import QWidget
 from ...controllers import AlertController
 from ...controllers.alert_controller import WINDOWS
 from .. import formatting as fmt
-from ..components import AdaptiveRow, DefectCard, LiveIndicator, ResponsiveGrid, SegmentedTabs, StatCard, hbox, text
+from ..components import (
+    AdaptiveRow, DefectCard, LiveIndicator, ResponsiveGrid, SearchField, SegmentedTabs, StatCard, hbox, text,
+)
 from ..shell import Page
 from ..theme import Color, Type
 from .common import open_photo_viewer
@@ -27,7 +29,12 @@ class _DashedRing(QWidget):
         p.drawEllipse(1, 1, 13, 11)
 
 
+_MONTHS = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"]
+
+
 def _and(items: list[str]) -> str:
+    if len(items) > 3:
+        return f"{', '.join(items[:2])} dan {len(items) - 2} lainnya"
     if len(items) <= 1:
         return "".join(items)
     return ", ".join(items[:-1]) + " dan " + items[-1]
@@ -39,6 +46,9 @@ class AlertPage(Page):
         self._ctrl = controller
         self._win = window_getter
         self.window = 0
+        self.search = SearchField("Cari kode batch atau produk", 280)
+        self.search.edit.textChanged.connect(lambda _: self._render())
+        self.actions.addWidget(self.search)
         self.actions.addWidget(LiveIndicator())
 
         self.stats = ResponsiveGrid(220, 4, 16, steps=(4, 2, 1))
@@ -64,6 +74,11 @@ class AlertPage(Page):
         self.body.addStretch(1)
         self._render()
 
+    def _when(self, alert) -> str:
+        if alert.timestamp and alert.timestamp.date() != self._ctrl.today():
+            return f"{alert.timestamp.day} {_MONTHS[alert.timestamp.month - 1]}, {alert.time[:5]}"
+        return f"pukul {alert.time[:5]}"
+
     def on_show(self) -> None:
         self._render()
 
@@ -72,26 +87,39 @@ class AlertPage(Page):
         self._render()
 
     def _render(self) -> None:
-        label = WINDOWS[self.window][0]
-        period = "hari ini" if WINDOWS[self.window][1] is None else f"{label} terakhir"
-        self.tabs.set_counts(self._ctrl.counts())
-        a = self._ctrl.summary(self.window)
+        label, span = WINDOWS[self.window]
+        period = {"today": "hari ini", "all": "semua waktu"}.get(span, f"{label} terakhir")
+        query = self.search.edit.text()
+        self.tabs.set_counts(self._ctrl.counts(query))
+        a = self._ctrl.summary(self.window, query)
+        if a.since is None:
+            since = "belum ada data"
+        elif a.since.date() == self._ctrl.today():
+            since = f"sejak pukul {a.since:%H.%M}"
+        else:
+            since = f"sejak {a.since.day} {_MONTHS[a.since.month - 1]}"
         self.stats.clear()
         self.stats.add(StatCard("pink", "warning", f"NG {period}", str(a.count), "kaleng", a.delta,
-                                f"sejak pukul {a.since:%H.%M}", "trend-up" if a.delta.startswith("+") else None,
+                                since, "trend-up" if a.delta.startswith("+") else None,
                                 highlight_value=True))
         self.stats.add(StatCard("indigo", "activity", "Skor anomali rata-rata", fmt.score(a.avg_score) if a.count else "-",
                                 "", f"ambang {fmt.score(a.avg_threshold)}" if a.count else "ambang -", f"{a.count} kaleng"))
         top = a.top
         self.stats.add(StatCard("blue", "trend-up", "Skor tertinggi", fmt.score(top.score) if top else "-", "",
-                                top.batch if top else "-", f"pukul {top.time[:5]}" if top else ""))
+                                top.batch if top else "-", self._when(top) if top else ""))
+        products = len({al.product for al in self._ctrl.alerts(self.window, query)})
         self.stats.add(StatCard("amber", "layers", "Batch terdampak", str(len(a.batches)), "batch",
-                                "HOLD" if a.batches else "-", _and(a.batches)))
+                                f"{products} produk" if a.batches else "-", _and(a.batches)))
         self.grid.clear()
-        alerts = self._ctrl.alerts(self.window)
+        alerts = self._ctrl.alerts(self.window, query)
         for i, al in enumerate(alerts):
-            card = DefectCard(al.batch, al.time, al.score, al.threshold, al.defect, highlight=i == 0)
+            older = al.timestamp and al.timestamp.date() != self._ctrl.today()
+            when = f"{al.timestamp.day} {_MONTHS[al.timestamp.month - 1]}, {al.time[:5]}" if older else al.time
+            card = DefectCard(al.batch, when, al.score, al.threshold, al.defect, highlight=i == 0)
             card.clicked.connect(lambda a=al: open_photo_viewer(self._win(), a))
             self.grid.add(card)
         self.empty.setVisible(not alerts)
-        self.empty.setText(f"Tidak ada kaleng NG dalam {period}. Pilih rentang waktu yang lebih panjang.")
+        if query.strip():
+            self.empty.setText(f"Tidak ada kaleng NG untuk “{query.strip()}” dalam {period}.")
+        else:
+            self.empty.setText(f"Tidak ada kaleng NG dalam {period}. Pilih rentang waktu yang lebih panjang.")

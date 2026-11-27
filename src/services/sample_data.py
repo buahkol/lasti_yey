@@ -4,11 +4,9 @@ Used by the services until the REST API (/api/v1) is connected. Each block
 names the endpoint that will provide it.
 """
 
-import random
-import re
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 
-from ..models import Alert, Batch, Inspection, Product, ProductionEvent, User
+from ..models import Alert, Batch, Product, ProductionEvent, User
 
 TODAY = date(2026, 11, 25)
 
@@ -53,10 +51,17 @@ BATCHES = [
 NOW = datetime(2026, 11, 25, 10, 45)
 
 
-def _alert(batch: str, time: str, score: float, defect: str) -> Alert:
-    threshold, product = (0.62, _TMT) if batch == "B-2411-01" else (0.64, _CBI)
-    at = datetime.combine(TODAY, datetime.strptime(time, "%H.%M.%S").time())
+_ALERT_PRODUCT = {"SDN-TMT-155": (0.62, _TMT), "SDN-CBI-155": (0.64, _CBI), "SDN-MNY-425": (0.58, _MNY)}
+
+
+def _alert(batch: str, time: str, score: float, defect: str, day: date = TODAY) -> Alert:
+    sku = next(b.sku for b in BATCHES if b.code == batch)
+    threshold, product = _ALERT_PRODUCT[sku]
+    at = datetime.combine(day, datetime.strptime(time, "%H.%M.%S").time())
     return Alert(batch, time, score, threshold, defect, product, at)
+
+
+_NOV24, _NOV23 = date(2026, 11, 24), date(2026, 11, 23)
 
 
 ALERTS = [
@@ -75,6 +80,16 @@ ALERTS = [
     _alert("B-2411-02", "08.12.48", 0.75, "rust"),
     _alert("B-2411-01", "07.36.20", 0.69, "dent"),
     _alert("B-2411-02", "07.24.09", 0.82, "label"),
+    # Earlier days: alerts are kept without a time limit so a batch can be traced later.
+    _alert("B-2410-27", "14.52.30", 0.78, "dent", _NOV24),
+    _alert("B-2410-23", "16.05.12", 0.73, "label", _NOV24),
+    _alert("B-2410-27", "11.18.44", 0.84, "rust", _NOV24),
+    _alert("B-2410-28", "09.40.03", 0.66, "dent", _NOV24),
+    _alert("B-2410-21", "17.22.51", 0.91, "rust", _NOV23),
+    _alert("B-2410-26", "13.47.09", 0.86, "dent", _NOV23),
+    _alert("B-2410-26", "11.02.36", 0.79, "label", _NOV23),
+    _alert("B-2410-21", "15.31.20", 0.74, "dent", _NOV23),
+    _alert("B-2410-24", "09.15.58", 0.70, "label", _NOV23),
 ]
 ALERT_SUMMARY = {"ng_30min": 7, "ng_delta": "+3", "since": "10.12", "avg_score": 0.80,
                  "top_score": 0.93, "top_batch": "B-2411-02", "top_time": "10.36", "affected_batches": 2}
@@ -151,34 +166,3 @@ EVENTS = {
         _event("09.37", "REJECT", "Skor 0,73 melewati ambang 0,62"),
     ],
 }
-
-
-
-
-def _minutes(duration: str) -> int:
-    hours = re.search(r"(\d+) jam", duration)
-    minutes = re.search(r"(\d+) menit", duration)
-    return (int(hours[1]) * 60 if hours else 0) + (int(minutes[1]) if minutes else 0)
-
-
-def inspection_history(batch_code: str) -> list[Inspection]:
-    first_id = 1
-    for batch in sorted(BATCHES, key=lambda b: b.started_at):
-        if batch.code == batch_code:
-            break
-        first_id += batch.output
-    else:
-        return []
-    threshold = next(p.threshold for p in PRODUCTS if p.sku == batch.sku)
-    rnd = random.Random(batch_code)
-    ng = set(rnd.sample(range(batch.output), batch.ng_count))
-    step = _minutes(batch.duration) * 60 / max(batch.output, 1)
-    rows = []
-    for i in range(batch.output):
-        when = batch.started_at + timedelta(seconds=round(step * (i + 0.5)))
-        if i in ng:
-            score, result, defect = rnd.uniform(threshold + 0.01, 0.95), "NG", rnd.choice(["dent", "rust", "label"])
-        else:
-            score, result, defect = rnd.uniform(0.18, threshold - 0.06), "OK", "none"
-        rows.append(Inspection(first_id + i, batch_code, result, round(score, 2), when, defect))
-    return rows[::-1]
